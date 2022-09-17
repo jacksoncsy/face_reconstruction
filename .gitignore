@@ -1,3 +1,10 @@
+# asset files
+ibug/face_reconstruction/deca/assets
+ibug/face_reconstruction/deca/weights
+
+# video files
+*.mp4
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

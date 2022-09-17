@@ -129,6 +129,7 @@ cfg.loss.reg_z = 0.005  # regularisation on displacement values
 cfg.loss.reg_diff = 0.5 # loss weights on smoothness of shading
 cfg.loss.remove_outlier = False # whether to remove failure examples when computing loss
 
+
 def check_cfg(cfg):
     assert cfg.train.log_every_n_steps > 0
     assert cfg.train.val_every_n_steps > 0    
