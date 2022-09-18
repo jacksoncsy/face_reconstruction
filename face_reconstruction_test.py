@@ -161,14 +161,17 @@ def main() -> None:
                             # TODO: to check if yaw, picth and roll's sign comply with the BC internal 
                             yaw, pitch, roll = results["face_poses"][idx] * 180. / np.pi
                             bbox = results["bboxes"][idx].astype(int)
+                            frame_diagonal = np.linalg.norm(frame.shape[:2])
+                            font_scale = max(0.5, frame_diagonal / 2000.)
+                            thickness = np.round(2.0 * font_scale)
                             cv2.putText(
                                 frame,
                                 f"Yaw:{yaw:.01f}, Pitch:{pitch:.01f}, Roll:{roll:.01f}",
                                 (bbox[0] - 100, bbox[3] + 50),
                                 cv2.FONT_HERSHEY_SIMPLEX,
-                                fontScale=1,
+                                fontScale=font_scale,
                                 color=(0, 0, 180),
-                                thickness=2,
+                                thickness=thickness,
                             )
 
                 # Write the frame to output video (if recording)
