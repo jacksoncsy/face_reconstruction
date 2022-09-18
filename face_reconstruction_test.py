@@ -8,10 +8,6 @@ from ibug.face_alignment import FANPredictor
 from ibug.face_alignment.utils import plot_landmarks
 from ibug.face_detection import RetinaFacePredictor
 from ibug.face_reconstruction import DecaCoarsePredictor
-try:
-    from scipy.interpolate import CubicSpline
-except:
-    CubicSpline = None
 
 
 def main() -> None:
@@ -23,7 +19,7 @@ def main() -> None:
     )
     parser.add_argument(
         "--output", "-o", default=None,
-        help="Output file path",
+        help="Output filename and path",
     )
     parser.add_argument(
         "--fourcc", "-f", type=str, default="mp4v", 
@@ -47,30 +43,34 @@ def main() -> None:
         help="Device to be used for face reconstruction (default=cuda:0)",
     )
     parser.add_argument(
-        "--hide-reconstruction-results", "-hr", action="store_true", default=False,
-        help="Do not visualise face reconstruction results",
+        "--show-reconstruction-bbox", "-srb", action="store_true", default=False,
+        help="Do not visualise bbox for face reconstruction",
+    )
+    parser.add_argument(
+        "--show-reconstruction-landmarks2d", "-sr2d", action="store_true", default=False,
+        help="Do not visualise 2D-style landmarks from face reconstruction",
+    )
+    parser.add_argument(
+        "--hide-reconstruction-pose", "-hrp", action="store_true", default=False,
+        help="Do not visualise estimated pose from face reconstruction",
+    )
+    parser.add_argument(
+        "--hide-reconstruction-landmarks3d", "-hr3d", action="store_true", default=False,
+        help="Do not visualise 3D landmarks from face reconstruction",
     )
     # arguments for face detection
     parser.add_argument(
-        "--detection-threshold", "-dt", type=float, default=0.8,
-        help="Confidence threshold for face detection (default=0.8)",
+        "--detection-threshold", "-dt", type=float, default=0.95,
+        help="Confidence threshold for face detection (default=0.95)",
     )
     parser.add_argument(
         "--detection-device", "-dd", default="cuda:0",
         help="Device to be used for face detection (default=cuda:0)",
     )
-    parser.add_argument(
-        "--hide-detection-results", "-hd", action="store_true", default=False,
-        help="Do not visualise face detection results",
-    )
     # arguments for face alignment
     parser.add_argument(
         "--alignment-device", "-ad", default="cuda:0",
         help="Device to be used for face alignment (default=cuda:0)",
-    )
-    parser.add_argument(
-        "--hide-alignment-results", "-ha", action="store_true", default=False,
-        help="Do not visualise face alignment results",
     )
     args = parser.parse_args()
 
@@ -136,23 +136,39 @@ def main() -> None:
 
                 # Face reconstruction
                 start_time = time.time()
-                landmarks, scores = face_reconstructor(frame, landmarks, rgb=True)
-                face_reconstruction_time = time.time() - start_time                
+                results = face_reconstructor(frame, landmarks, rgb=True)
+                face_reconstruction_time = time.time() - start_time
 
                 # Textural output
                 total_time = 1000.0 * sum([face_detection_time, face_alignment_time, face_reconstruction_time])
                 print(f"Frame #{frame_number} processed in {total_time:.02f} ms, {len(faces)} faces analysed.")
                 print(f"3D face reconstruction took {face_reconstruction_time * 1000.0:.02f} ms.")
 
-                # # Rendering
-                # for face, lm, sc in zip(faces, landmarks, scores):
-                #     if not args.hide_detection_results:
-                #         bbox = face[:4].astype(int)
-                #         cv2.rectangle(frame, (bbox[0], bbox[1]), (bbox[2], bbox[3]), color=(0, 0, 255), thickness=2)
-                #     if not args.hide_alignment_results:
-                #         plot_landmarks(frame, lm, sc, threshold=args.alignment_threshold)
-                #     if not args.hide_detection_results and len(face) > 5:
-                #         plot_landmarks(frame, face[5:].reshape((-1, 2)), pts_radius=3)
+                # Rendering
+                n_faces = results["vertices"].shape[0]
+                for idx in range(n_faces):
+                    if args.show_reconstruction_bbox:
+                        bbox = results["bboxes"][idx].astype(int)
+                        cv2.rectangle(frame, (bbox[0], bbox[1]), (bbox[2], bbox[3]), color=(0, 0, 255), thickness=2)
+                    if args.show_reconstruction_landmarks2d:
+                        landmarks2d = results["landmarks2d"][idx]
+                        plot_landmarks(frame, landmarks2d, line_colour=(255, 0, 0))
+                    if not args.hide_reconstruction_landmarks3d:
+                        landmarks3d = results["landmarks3d"][idx, :, :2]
+                        plot_landmarks(frame, landmarks3d)
+                    if not args.hide_reconstruction_pose:
+                        # TODO: to check if yaw, picth and roll's sign comply with the BC internal 
+                        yaw, pitch, roll = results["face_poses"][idx] * 180. / np.pi
+                        bbox = results["bboxes"][idx].astype(int)
+                        cv2.putText(
+                            frame,
+                            f"Yaw:{yaw:.01f}, Pitch:{pitch:.01f}, Roll:{roll:.01f}",
+                            (bbox[0] - 100, bbox[3] + 50),
+                            cv2.FONT_HERSHEY_SIMPLEX,
+                            fontScale=1,
+                            color=(0, 0, 180),
+                            thickness=2,
+                        )
 
                 # Write the frame to output video (if recording)
                 if out_vid is not None:

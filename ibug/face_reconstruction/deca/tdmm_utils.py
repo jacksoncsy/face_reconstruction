@@ -1,5 +1,4 @@
 import numpy as np
-import scipy
 import torch
 import torch.nn.functional as F
 
@@ -348,7 +347,7 @@ def to_tensor(array, dtype=torch.float32):
 
 
 def to_np(array, dtype=np.float32):
-    if not isinstance(array, scipy.sparse):
+    if "scipy.sparse" in str(type(array)):
         array = array.todense()
     return np.array(array, dtype=dtype)
 

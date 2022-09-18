@@ -59,28 +59,27 @@ def transform_image(image, tform, crop_size):
     return warp(image, tform.inverse, output_shape=(crop_size, crop_size))
 
 
-def transform_points(points, tform, points_scale=None, out_scale=None):
-    points_2d = points[:,:,:2]
+def transform_to_image_space(points, tform, crop_size):
+    last_dim = points.shape[-1]
+    assert last_dim == 2 or last_dim == 3
+
+    points_2d = points[..., :2]
         
-    #'input points must use original range'
-    if points_scale:
-        assert points_scale[0] == points_scale[1]
-        points_2d = (points_2d*0.5 + 0.5) * points_scale[0]
+    #input points must use original range
+    points_2d = (points_2d * 0.5 + 0.5) * crop_size
 
     batch_size, n_points, _ = points.shape
     trans_points_2d = torch.bmm(
-        torch.cat(
-            [
-                points_2d,
-                torch.ones([batch_size, n_points, 1], device=points.device, dtype=points.dtype),
-            ],
-            dim=-1,
-        ), 
+        torch.cat([points_2d, torch.ones([batch_size, n_points, 1], device=points.device, dtype=points.dtype)], dim=-1), 
         tform,
-    ) 
-    # h, w of output image size
-    if out_scale: 
-        trans_points_2d[:,:,0] = trans_points_2d[:,:,0] / out_scale[1] * 2 - 1
-        trans_points_2d[:,:,1] = trans_points_2d[:,:,1] / out_scale[0] * 2 - 1
-    trans_points = torch.cat([trans_points_2d[:,:,:2], points[:,:,2:]], dim=-1)
+    )
+
+    if last_dim == 2:
+        trans_points = trans_points_2d[..., :2]
+    else:
+        # guess the z as well
+        scales = (tform[:, 0, 0] + tform[:, 1, 1]) / 2
+        z_coords = -scales[:, None, None] * crop_size * (points[..., [2]] * 0.5 + 0.5)
+        trans_points = torch.cat([trans_points_2d[..., :2], z_coords], dim=-1)
+    
     return trans_points

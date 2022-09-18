@@ -156,7 +156,10 @@ class ARMultilinear(nn.Module):
         # get the angles
         angles = torch.zeros((batch_size, 3), dtype=dtype)
         for idx in range(batch_size):
-            angles[idx] = matrix2angle(rot_mats[idx])
+            yaw, pitch, roll = matrix2angle(rot_mats[idx])
+            angles[idx][0] = yaw
+            angles[idx][1] = pitch
+            angles[idx][2] = roll
 
         return angles
 
@@ -166,10 +169,11 @@ class ARMultilinear(nn.Module):
                 shape_params: (N, n_shape)
                 expression_params: (N, n_exp)
                 pose_params: (N, n_pose), n_pose=6, rotation vector (axis-angle) + [tx, ty, tx]
-            return:d
-                vertices: (N, V, 3)
-                landmarks2d: (N, n_landmarks, 2), boundary placed on contour
-                landmarks3d: (N, n_landmarks, 3)
+            return:
+                vertices: (bs, nv, 3)
+                landmarks2d: (bs, n_lmk, 3), 2D-style landmarks
+                landmarks3d: (bs, n_lmk, 3), full 3D landmarks
+                face_poses: (bs, 3), face pose in radians with yaw-pitch-roll order            
         """
         batch_size = shape_params.shape[0]
         # project shape parameters first
@@ -226,7 +230,10 @@ class ARMultilinear(nn.Module):
             self.full_lmk_bary_coords.repeat(batch_size, 1, 1),
         )
 
-        return vertices, landmarks2d, landmarks3d
+        # get face pose
+        face_poses = self.get_euler_angles(pose_params)
+
+        return vertices, landmarks2d, landmarks3d, face_poses
 
 
 class FLAME(nn.Module):
@@ -430,12 +437,14 @@ class FLAME(nn.Module):
     def forward(self, shape_params, expression_params, pose_params):
         """
             Input:
-                shape_params: N X number of shape parameters
-                expression_params: N X number of expression parameters
-                pose_params: N X number of pose parameters (6)
+                shape_params: (bs, number of shape parameters)
+                expression_params: (bs, number of expression parameters)
+                pose_params: (bs, number of pose parameters==6)
             return:
-                vertices: N X V X 3
-                landmarks: N X number of landmarks X 3
+                vertices: (bs, nv, 3)
+                landmarks2d: (bs, n_lmk, 3), 2D-style landmarks
+                landmarks3d: (bs, n_lmk, 3), full 3D landmarks
+                face_poses: (bs, 3), face pose in radians with yaw-pitch-roll order
         """
         batch_size = shape_params.shape[0]
         # no eye pose in current method, so we use default ones
@@ -478,11 +487,15 @@ class FLAME(nn.Module):
             lmk_faces_idx,
             lmk_bary_coords,
         )
-        bz = vertices.shape[0]
+        
         landmarks3d = vertices2landmarks(
             vertices,
             self.faces_tensor,
-            self.full_lmk_faces_idx.repeat(bz, 1),
-            self.full_lmk_bary_coords.repeat(bz, 1, 1),
+            self.full_lmk_faces_idx.repeat(batch_size, 1),
+            self.full_lmk_bary_coords.repeat(batch_size, 1, 1),
         )
-        return vertices, landmarks2d, landmarks3d
+
+        # get face pose
+        face_poses = self.get_euler_angles(pose_params)
+
+        return vertices, landmarks2d, landmarks3d, face_poses

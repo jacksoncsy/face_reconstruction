@@ -13,7 +13,7 @@ from .deca_utils import (
     compute_similarity_transform,
     parse_bbox_from_landmarks,
     transform_image,
-    transform_points,
+    transform_to_image_space,
 )
 from .tdmm import FLAME, ARMultilinear
 
@@ -164,13 +164,11 @@ class DecaCoarsePredictor(object):
                 crop_image = transform_image(image / 255., tform, self.config.input_size)
                 batch_face.append(crop_image)
 
-            # TODO: check the size
-            bboxes = np.concatenate(bboxes)
-
+            # (bs, 4)
+            bboxes = np.array(bboxes)
             # (bs, 3, 3)
             batch_tform = np.array(batch_tform)
             batch_tform = torch.from_numpy(batch_tform).float().to(self.device)
-                
             # (bs, C, H, W)
             batch_face = np.array(batch_face).transpose((0, 3, 1, 2))
             batch_face = torch.from_numpy(batch_face).float().to(self.device)
@@ -182,8 +180,9 @@ class DecaCoarsePredictor(object):
             params_dict = self.parse_parameters(params)
 
             # Reconstruct using shape, expression and pose parameters
-            # Results are in world coordinates, we will bring them to the original image space
-            vertices_world, landmarks2d_world, landmarks3d_world = self.tdmm(
+            # Results are in world coordinates, we will bring them to the original image space3
+            # Also returns face poses (bs, 3) in radians with yaw-pitch-roll order
+            vertices_world, landmarks2d_world, landmarks3d_world, face_poses = self.tdmm(
                 shape_params=params_dict["shape"],
                 expression_params=params_dict["exp"],
                 pose_params=params_dict["pose"],
@@ -200,16 +199,12 @@ class DecaCoarsePredictor(object):
             vertices[..., 1:] = -vertices[..., 1:]
 
             # Recover to the original image space
-            points_scale = [self.config.input_size, self.config.input_size]
             h, w = image.shape[:2]
             batch_inv_tform = torch.inverse(batch_tform).transpose(1,2).to(self.device)
 
-            landmarks2d = transform_points(landmarks2d, batch_inv_tform, points_scale, [h, w])
-            landmarks3d = transform_points(landmarks3d, batch_inv_tform, points_scale, [h, w])
-            vertices = transform_points(vertices, batch_inv_tform, points_scale, [h, w])
-
-            # Get poses (bs, 3), in radians and under yaw-pitch-roll order
-            face_poses = self.tdmm.get_euler_angles(params_dict["pose"])
+            landmarks2d = transform_to_image_space(landmarks2d, batch_inv_tform, self.config.input_size)
+            landmarks3d = transform_to_image_space(landmarks3d, batch_inv_tform, self.config.input_size)
+            vertices = transform_to_image_space(vertices, batch_inv_tform, self.config.input_size)
         
             return {
                 "bboxes": bboxes, # (bs, 4)
