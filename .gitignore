@@ -1,7 +1,12 @@
 # asset files
 ibug/face_reconstruction/deca/assets/ar_multilinear/*
+!ibug/face_reconstruction/deca/assets/ar_multilinear/.gitkeep
+
 ibug/face_reconstruction/deca/assets/flame/*
+!ibug/face_reconstruction/deca/assets/flame/.gitkeep
+
 ibug/face_reconstruction/deca/weights/*
+!ibug/face_reconstruction/deca/weights/.gitkeep
 tmp
 
 # Byte-compiled / optimized / DLL files
