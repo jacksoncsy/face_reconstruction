@@ -145,30 +145,31 @@ def main() -> None:
                 print(f"3D face reconstruction took {face_reconstruction_time * 1000.0:.02f} ms.")
 
                 # Rendering
-                n_faces = results["vertices"].shape[0]
-                for idx in range(n_faces):
-                    if args.show_reconstruction_bbox:
-                        bbox = results["bboxes"][idx].astype(int)
-                        cv2.rectangle(frame, (bbox[0], bbox[1]), (bbox[2], bbox[3]), color=(0, 0, 255), thickness=2)
-                    if args.show_reconstruction_landmarks2d:
-                        landmarks2d = results["landmarks2d"][idx]
-                        plot_landmarks(frame, landmarks2d, line_colour=(255, 0, 0))
-                    if not args.hide_reconstruction_landmarks3d:
-                        landmarks3d = results["landmarks3d"][idx, :, :2]
-                        plot_landmarks(frame, landmarks3d)
-                    if not args.hide_reconstruction_pose:
-                        # TODO: to check if yaw, picth and roll's sign comply with the BC internal 
-                        yaw, pitch, roll = results["face_poses"][idx] * 180. / np.pi
-                        bbox = results["bboxes"][idx].astype(int)
-                        cv2.putText(
-                            frame,
-                            f"Yaw:{yaw:.01f}, Pitch:{pitch:.01f}, Roll:{roll:.01f}",
-                            (bbox[0] - 100, bbox[3] + 50),
-                            cv2.FONT_HERSHEY_SIMPLEX,
-                            fontScale=1,
-                            color=(0, 0, 180),
-                            thickness=2,
-                        )
+                if results is not None:
+                    n_faces = results["vertices"].shape[0]
+                    for idx in range(n_faces):
+                        if args.show_reconstruction_bbox:
+                            bbox = results["bboxes"][idx].astype(int)
+                            cv2.rectangle(frame, (bbox[0], bbox[1]), (bbox[2], bbox[3]), color=(0, 0, 255), thickness=2)
+                        if args.show_reconstruction_landmarks2d:
+                            landmarks2d = results["landmarks2d"][idx]
+                            plot_landmarks(frame, landmarks2d, line_colour=(255, 0, 0))
+                        if not args.hide_reconstruction_landmarks3d:
+                            landmarks3d = results["landmarks3d"][idx, :, :2]
+                            plot_landmarks(frame, landmarks3d)
+                        if not args.hide_reconstruction_pose:
+                            # TODO: to check if yaw, picth and roll's sign comply with the BC internal 
+                            yaw, pitch, roll = results["face_poses"][idx] * 180. / np.pi
+                            bbox = results["bboxes"][idx].astype(int)
+                            cv2.putText(
+                                frame,
+                                f"Yaw:{yaw:.01f}, Pitch:{pitch:.01f}, Roll:{roll:.01f}",
+                                (bbox[0] - 100, bbox[3] + 50),
+                                cv2.FONT_HERSHEY_SIMPLEX,
+                                fontScale=1,
+                                color=(0, 0, 180),
+                                thickness=2,
+                            )
 
                 # Write the frame to output video (if recording)
                 if out_vid is not None:
