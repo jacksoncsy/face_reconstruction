@@ -1,6 +1,6 @@
 # asset files
-ibug/face_reconstruction/deca/assets
-ibug/face_reconstruction/deca/weights
+ibug/face_reconstruction/deca/assets/
+ibug/face_reconstruction/deca/weights/
 tmp
 
 # Byte-compiled / optimized / DLL files
