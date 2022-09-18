@@ -9,6 +9,7 @@ from .tdmm_utils import (
     batch_rotvec2matrix,
     lbs,
     load_obj,
+    matrix2angle,
     rot_mat_to_euler,
     to_np,
     to_tensor,
@@ -41,6 +42,8 @@ class ARMultilinear(nn.Module):
         self.register_buffer('v_template', verts)
         # triangles
         self.register_buffer('faces_tensor', faces)
+        # Triangulation
+        self.trilist = to_np(faces, dtype=np.int64)
 
         # load static and dynamic landmark embeddings
         self.load_landmark_embeddings(osp.join(tdmm_dir, "landmark_embedding.pkl"))
@@ -138,7 +141,25 @@ class ARMultilinear(nn.Module):
             self.full_lmk_bary_coords.repeat(vertices.shape[0], 1, 1),
         )
         return landmarks3d
-        
+
+    def get_euler_angles(self, pose_params, dtype=torch.float32):
+        """
+            Input:
+                pose_params: (bs, 6)
+            return:
+                angles: (bs, 3), [yaw, pitch, roll]
+        """
+        batch_size = pose_params.shape[0]
+        # get the final rotation matrix
+        # (bs, 3, 3)
+        rot_mats = batch_rodrigues(pose_params[:, :3])
+        # get the angles
+        angles = torch.zeros((batch_size, 3), dtype=dtype)
+        for idx in range(batch_size):
+            angles[idx] = matrix2angle(rot_mats[idx])
+
+        return angles
+
     def forward(self, shape_params, expression_params, pose_params):
         """
             Input:
@@ -189,7 +210,7 @@ class ARMultilinear(nn.Module):
         # (N, 68, 3)
         lmk_bary_coords = torch.cat([dyn_lmk_bary_coords, lmk_bary_coords], 1)
         
-        # get 2d landmarks
+        # get 2d landmarks (face boundary is on the visible contour)
         landmarks2d = vertices2landmarks(
             vertices,
             self.faces_tensor,
@@ -225,6 +246,8 @@ class FLAME(nn.Module):
         self.register_buffer(
             'faces_tensor', to_tensor(to_np(flame_model.f, dtype=np.int64), dtype=torch.long),
         )
+        # Triangulation
+        self.trilist = to_np(flame_model.f, dtype=np.int64)
         # The vertices of the template model
         self.register_buffer(
             'v_template', to_tensor(to_np(flame_model.v_template), dtype=self.dtype),
@@ -360,13 +383,57 @@ class FLAME(nn.Module):
         )
         return landmarks3d
 
+    def get_euler_angles(self, pose_params, dtype=torch.float32):
+        """
+            Input:
+                pose_params:  (bs, 6)
+            return:
+                angles: (bs, 3), [yaw, pitch, roll]
+        """
+        batch_size = pose_params.shape[0]
+        # no eye pose in current method, so we use default ones
+        eye_pose_params = self.eye_pose.expand(batch_size, -1)
+        full_pose = torch.cat(
+            [
+                pose_params[:, :3],
+                self.neck_pose.expand(batch_size, -1),
+                pose_params[:, 3:],
+                eye_pose_params,
+            ],
+            dim=1,
+        )
+
+        aa_pose = torch.index_select(
+            full_pose.view(batch_size, -1, 3), 1, self.neck_kin_chain,
+        )
+
+        rot_mats = batch_rodrigues(
+            aa_pose.view(-1, 3), dtype=dtype,
+        ).view(batch_size, -1, 3, 3)
+
+        rel_rot_mat = torch.eye(
+            3, device=full_pose.device, dtype=dtype,
+        ).unsqueeze_(dim=0).expand(batch_size, -1, -1)
+        
+        # get the final rotation matrix
+        # (bs, 3, 3)
+        for idx in range(len(self.neck_kin_chain)):
+            rel_rot_mat = torch.bmm(rot_mats[:, idx], rel_rot_mat)
+
+        # get the angles
+        angles = torch.zeros((batch_size, 3), dtype=dtype)
+        for idx in range(batch_size):
+            angles[idx] = matrix2angle(rel_rot_mat[idx])
+
+        return angles
+
     def forward(self, shape_params, expression_params, pose_params):
         """
             Input:
                 shape_params: N X number of shape parameters
                 expression_params: N X number of expression parameters
                 pose_params: N X number of pose parameters (6)
-            return:d
+            return:
                 vertices: N X V X 3
                 landmarks: N X number of landmarks X 3
         """

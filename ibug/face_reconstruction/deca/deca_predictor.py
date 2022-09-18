@@ -1,24 +1,24 @@
 import os
-import cv2
 import torch
 import numpy as np
 
 from collections import OrderedDict
-from skimage.transform._geometric import GeometricTransform
 from types import SimpleNamespace
-from typing import Union, Optional, List, Dict, Tuple
+from typing import Union, Optional, Dict
 
 from .deca import DecaCoarse
 from .deca_utils import (
-    parse_bbox_from_landmarks,
+    batch_orth_proj,
     bbox2point,
     compute_similarity_transform,
+    parse_bbox_from_landmarks,
     transform_image,
+    transform_points,
 )
 from .tdmm import FLAME, ARMultilinear
 
 
-__all__ = ['DecaCoarsePredictor']
+__all__ = ["DecaCoarsePredictor"]
 
 
 class DecaCoarsePredictor(object):
@@ -73,7 +73,7 @@ class DecaCoarsePredictor(object):
                 weight_path=os.path.join(os.path.dirname(__file__), "weights/ar_res50_coarse.pth"),
                 settings=SimpleNamespace(
                     tdmm_type="ar",
-                    backbone='resnet50',
+                    backbone="resnet50",
                     input_size=224,
                     coarse_parameters=OrderedDict(
                         {"shape": 72, "tex": 23, "exp": 52, "pose": 6, "cam": 3, "light": 27}
@@ -85,7 +85,7 @@ class DecaCoarsePredictor(object):
                 weight_path=os.path.join(os.path.dirname(__file__), "weights/ar_mbv2_coarse.pth"),
                 settings=SimpleNamespace(
                     tdmm_type="ar",
-                    backbone='mobilenetv2',
+                    backbone="mobilenetv2",
                     input_size=224,
                     coarse_parameters=OrderedDict(
                         {"shape": 72, "tex": 23, "exp": 52, "pose": 6, "cam": 3, "light": 27}
@@ -97,7 +97,7 @@ class DecaCoarsePredictor(object):
                 weight_path=os.path.join(os.path.dirname(__file__), "weights/flame_res50_coarse.pth"),
                 settings=SimpleNamespace(
                     tdmm_type="flame",
-                    backbone='resnet50',
+                    backbone="resnet50",
                     input_size=224,
                     coarse_parameters=OrderedDict(
                         {"shape": 100, "tex": 50, "exp": 50, "pose": 6, "cam": 3, "light": 27}
@@ -109,7 +109,7 @@ class DecaCoarsePredictor(object):
                 weight_path=os.path.join(os.path.dirname(__file__), "weights/flame_mbv2_coarse.pth"),
                 settings=SimpleNamespace(
                     tdmm_type="flame",
-                    backbone='mobilenetv2',
+                    backbone="mobilenetv2",
                     input_size=224,
                     coarse_parameters=OrderedDict(
                         {"shape": 100, "tex": 50, "exp": 50, "pose": 6, "cam": 3, "light": 27}
@@ -141,11 +141,8 @@ class DecaCoarsePredictor(object):
 
     @torch.no_grad()
     def __call__(
-        self, 
-        image: np.ndarray,
-        landmarks: np.ndarray,
-        rgb: bool=True,
-    ) -> Tuple[np.ndarray, List[GeometricTransform]]:
+        self, image: np.ndarray, landmarks: np.ndarray, rgb: bool=True,
+    ) -> Union[Dict, None]:
         if landmarks.size > 0:
             if rgb:
                 image = image[..., ::-1]
@@ -154,39 +151,90 @@ class DecaCoarsePredictor(object):
                 landmarks = landmarks[np.newaxis, ...]
 
             # Crop the faces
+            bboxes = []
             batch_face = []
             batch_tform = []
             for lms in landmarks:
-                src_size, src_center = bbox2point(parse_bbox_from_landmarks(lms))
+                bbox = parse_bbox_from_landmarks(lms)
+                bboxes.append(bbox)
+                src_size, src_center = bbox2point(bbox)
                 # move the detected face to a standard frame
                 tform = compute_similarity_transform(src_size, src_center, self.config.input_size)
+                batch_tform.append(tform.params)
                 crop_image = transform_image(image / 255., tform, self.config.input_size)
                 batch_face.append(crop_image)
-                batch_tform.append(tform)
-            # (bs, C, H, W)   
+
+            # TODO: check the size
+            bboxes = np.concatenate(bboxes)
+
+            # (bs, 3, 3)
+            batch_tform = np.array(batch_tform)
+            batch_tform = torch.from_numpy(batch_tform).float().to(self.device)
+                
+            # (bs, C, H, W)
             batch_face = np.array(batch_face).transpose((0, 3, 1, 2))
             batch_face = torch.from_numpy(batch_face).float().to(self.device)
 
-            # Get 3DMM parameters
-            params = self.net(batch_face).cpu().numpy()
+            # Get parameters including 3DMMs, pose, light, camera etc.
+            params = self.net(batch_face)
 
-            return params, batch_tform
-        else:
-            return np.empty(shape=(0, self.net.output_size), dtype=np.float32), []
+            # Parse those parameters according to the config
+            params_dict = self.parse_parameters(params)
 
-    @staticmethod
-    def decode(tdmm_params: np.ndarray, pose_pref: int = 0) -> Union[Dict, List[Dict]]:
-        if tdmm_params.size > 0:
-            if tdmm_params.ndim > 1:
-                return [DECAPredictor.decode(x) for x in tdmm_params]
-            else:
-                roi_box = tdmm_params[:4]
-                params = tdmm_params[4:]
-                vertex, pts68, f_rot, tr = reconstruct_from_3dmm(params)
-                camera_transform = {'fR': f_rot, 'T': tr}
-                pitch, yaw, roll, t3d, f = parse_param_pose(params, pose_pref)
-                face_pose = {'pitch': pitch, 'yaw': yaw, 'roll': roll, 't3d': t3d, 'f': f}
-                return {'roi_box': roi_box, 'params': params, 'vertex': vertex, 'pts68': pts68,
-                        'face_pose': face_pose, 'camera_transform': camera_transform}
+            # Reconstruct using shape, expression and pose parameters
+            # Results are in world coordinates, we will bring them to the original image space
+            vertices_world, landmarks2d_world, landmarks3d_world = self.tdmm(
+                shape_params=params_dict["shape"],
+                expression_params=params_dict["exp"],
+                pose_params=params_dict["pose"],
+            )
+
+            # Get projected vertices and landmarks in the crop image space
+            landmarks2d = batch_orth_proj(landmarks2d_world, params_dict["cam"])[..., :2]
+            landmarks2d[..., 1:] = -landmarks2d[..., 1:]
+            
+            landmarks3d = batch_orth_proj(landmarks3d_world, params_dict["cam"])
+            landmarks3d[..., 1:] = -landmarks3d[..., 1:]
+            
+            vertices = batch_orth_proj(vertices_world, params_dict["cam"])
+            vertices[..., 1:] = -vertices[..., 1:]
+
+            # Recover to the original image space
+            points_scale = [self.config.input_size, self.config.input_size]
+            h, w = image.shape[:2]
+            batch_inv_tform = torch.inverse(batch_tform).transpose(1,2).to(self.device)
+
+            landmarks2d = transform_points(landmarks2d, batch_inv_tform, points_scale, [h, w])
+            landmarks3d = transform_points(landmarks3d, batch_inv_tform, points_scale, [h, w])
+            vertices = transform_points(vertices, batch_inv_tform, points_scale, [h, w])
+
+            # Get poses (bs, 3), in radians and under yaw-pitch-roll order
+            face_poses = self.tdmm.get_euler_angles(params_dict["pose"])
+        
+            return {
+                "bboxes": bboxes, # (bs, 4)
+                "params_dict": {k:v.cpu().numpy() for k, v in params_dict.items()},
+                "vertices": vertices.cpu().numpy(), # (bs, nv, 3)
+                "landmarks2d": landmarks2d.cpu().numpy(), # (bs, n_lmk, 2)
+                "landmarks3d": landmarks3d.cpu().numpy(), # (bs, n_lmk, 3)
+                "vertices_world": vertices_world.cpu().numpy(), # (bs, nv, 3)
+                "landmarks3d_world": landmarks3d_world.cpu().numpy(), # (bs, n_lmk, 3)
+                "face_poses": face_poses.cpu().numpy(), # (bs, 3)
+            }
         else:
-            return []
+            return None
+
+    def parse_parameters(self, parameters: torch.tensor) -> Dict:
+        """
+        parameters: (bs, n_params), parameters predicted by deca
+        """
+        params_dict = {}
+        curr_i = 0
+        for k, v in self.config.coarse_parameters.items():
+            params_dict[k] = parameters[:, curr_i:curr_i+v]
+            curr_i += v
+        
+        return params_dict
+
+    def get_trilist(self) -> np.array:
+        return self.tdmm.trilist

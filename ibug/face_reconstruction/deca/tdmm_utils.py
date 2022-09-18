@@ -302,6 +302,34 @@ def load_obj(obj_filename):
     return verts, uvcoords, faces, uv_faces
 
 
+def matrix2angle(rot_mat):
+    """ compute three Euler angles from a Rotation Matrix. 
+    Ref: http://www.gregslabaugh.net/publications/euler.pdf
+    
+    Args:
+        rot_mat: (3,3). rotation matrix
+    Returns (assumes rotation in x-y-z order):
+        x: yaw
+        y: pitch
+        z: roll
+    """
+    if -1.0 < rot_mat[2, 0] < 1.0:
+        x = -torch.asin(rot_mat[2, 0])    # It is minus in the reference
+        y = torch.atan2(rot_mat[2, 1] / torch.cos(x), rot_mat[2, 2] / torch.cos(x))
+        z = torch.atan2(rot_mat[1, 0] / torch.cos(x), rot_mat[0, 0] / torch.cos(x))
+    else:
+        # Gimbal lock
+        z = 0   # can be anything
+        if rot_mat[2, 0] == -1:
+            x = torch.from_numpy(np.pi / 2)
+            y = z + torch.atan2(rot_mat[0, 1], rot_mat[0, 2])
+        else:
+            x = torch.from_numpy(-np.pi / 2)
+            y = -z + torch.atan2(-rot_mat[0, 1], -rot_mat[0, 2])
+
+    return x, y, z
+
+
 def rot_mat_to_euler(rot_mats):
     # Calculates rotation matrix to euler angles
     # Careful for extreme cases of eular angles like [0.0, pi, 0.0]
