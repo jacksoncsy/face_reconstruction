@@ -55,15 +55,6 @@ class DecaCoarsePredictor(object):
                 self.net,
                 torch.rand(1, 3, self.config.input_size, self.config.input_size).to(self.device),
             )
-            # TODO: does tdmm need to be traceable?
-            self.tdmm = torch.jit.trace(
-                self.tdmm,
-                (
-                    torch.rand(1, self.config.coarse_parameters["shape"]).to(self.device),
-                    torch.rand(1, self.config.coarse_parameters["exp"]).to(self.device),
-                    torch.rand(1, self.config.coarse_parameters["pose"]).to(self.device),
-                )
-            )
 
     @staticmethod
     def create_model_config(name: str="ar_res50_coarse") -> SimpleNamespace:
