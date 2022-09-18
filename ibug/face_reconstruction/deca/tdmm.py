@@ -157,10 +157,10 @@ class ARMultilinear(nn.Module):
         angles = torch.zeros((batch_size, 3), dtype=dtype)
         for idx in range(batch_size):
             yaw, pitch, roll = matrix2angle(rot_mats[idx])
-            angles[idx][0] = yaw
-            angles[idx][1] = pitch
-            angles[idx][2] = roll
-
+            angles[idx, 0] = yaw
+            angles[idx, 1] = pitch
+            angles[idx, 2] = roll
+        
         return angles
 
     def forward(self, shape_params, expression_params, pose_params):
