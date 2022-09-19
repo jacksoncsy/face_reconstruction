@@ -35,8 +35,8 @@ def main() -> None:
     )
     # arguments for face reconstruction
     parser.add_argument(
-        '--reconstruction-weights', '-rw', default='ar_res50_coarse',
-        help='Weights to be loaded for face reconstruction, i.e., ar_res50_coarse, ar_mbv2_coarse, flame_res50_coarse or flame_mbv2_coarse'
+        "--reconstruction-weights", "-rw", default="flame_res50_coarse",
+        help="Pretrained weights (ar_res50_coarse, ar_mbv2_coarse, flame_res50_coarse or flame_mbv2_coarse)"
     )
     parser.add_argument(
         "--reconstruction-device", "-rd", default="cuda:0",
