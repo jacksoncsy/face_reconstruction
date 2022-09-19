@@ -340,7 +340,7 @@ def rot_mat_to_euler(rot_mats):
 
 
 def to_tensor(array, dtype=torch.float32):
-    if isinstance(array, torch.tensor):
+    if isinstance(array, torch.Tensor):
         return array
     else:
         return torch.tensor(array, dtype=dtype)

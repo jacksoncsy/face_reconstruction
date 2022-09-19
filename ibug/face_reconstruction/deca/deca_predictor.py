@@ -43,7 +43,9 @@ class DecaCoarsePredictor(object):
 
         # load network to predict parameters
         self.net = DecaCoarse(config=self.config).to(self.device)
-        self.net.load_state_dict(torch.load(model_config.weight_path, map_location=self.device))
+        self.net.load_state_dict(
+            torch.load(model_config.weight_path, map_location=self.device)["state_dict"]
+        )
         self.net.eval()
         
         # load 3DMM and other related assets

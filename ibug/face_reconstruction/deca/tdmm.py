@@ -430,7 +430,10 @@ class FLAME(nn.Module):
         # get the angles
         angles = torch.zeros((batch_size, 3), dtype=dtype)
         for idx in range(batch_size):
-            angles[idx] = matrix2angle(rel_rot_mat[idx])
+            yaw, pitch, roll = matrix2angle(rel_rot_mat[idx])
+            angles[idx, 0] = yaw
+            angles[idx, 1] = pitch
+            angles[idx, 2] = roll
 
         return angles
 
