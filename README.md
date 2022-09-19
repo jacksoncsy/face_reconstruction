@@ -41,7 +41,7 @@ from ibug.face_reconstruction import DecaCoarsePredictor
 reconstructor = DecaCoarsePredictor(device='cuda:0')
 
 # Fit 3DMM to the face specified by the 68 2D landmarks.
-reconstruction_results = reconstructor(image, landmarks, rgb=True)[0]
+reconstruction_results = reconstructor(image, landmarks, rgb=True)
 ```
 
 ## References
