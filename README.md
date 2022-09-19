@@ -21,7 +21,7 @@ pip install -e .
 ```
 
 2. Download the 3DMMs assets \
-    a. Download [FLAME](https://flame.is.tue.mpg.de/download.php), choose **FLAME 2020** and unzip it, move 'generic_model.pkl' into ./ibug/face_reconstruction/deca/assets/flame  
+    a. Download [FLAME](https://flame.is.tue.mpg.de/download.php), choose **FLAME 2020** and unzip it, move **generic_model.pkl** into ./ibug/face_reconstruction/deca/assets/flame  
     b. Download [FLAME landmark asset](https://github.com/YadiraF/DECA/blob/master/data/landmark_embedding.npy), and move it into ./ibug/face_reconstruction/deca/assets/flame
 
 3. Download the pretrained models
