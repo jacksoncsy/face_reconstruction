@@ -158,16 +158,17 @@ def main() -> None:
                             landmarks3d = results["landmarks3d"][idx, :, :2]
                             plot_landmarks(frame, landmarks3d)
                         if not args.hide_reconstruction_pose:
-                            # TODO: to check if yaw, picth and roll's sign comply with the BC internal 
                             yaw, pitch, roll = results["face_poses"][idx] * 180. / np.pi
                             bbox = results["bboxes"][idx].astype(int)
                             frame_diagonal = np.linalg.norm(frame.shape[:2])
+                            text_x = int(max(0, bbox[0] - frame_diagonal / 20.))
+                            text_y = int(min(frame.shape[0] - 1, bbox[3] + 0.15*(bbox[3]-bbox[1])))
                             font_scale = max(0.3, frame_diagonal / 2000.)
                             thickness = int(max(1, np.round(2.0 * font_scale)))
                             cv2.putText(
                                 frame,
                                 f"Yaw:{int(yaw)}  Pitch:{int(pitch)}  Roll:{int(roll)}",
-                                (bbox[0] - 100, bbox[3] + int(0.15*(bbox[3]-bbox[1]))),
+                                (text_x, text_y),
                                 cv2.FONT_HERSHEY_SIMPLEX,
                                 fontScale=font_scale,
                                 color=(0, 0, 180),
