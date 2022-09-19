@@ -162,12 +162,12 @@ def main() -> None:
                             yaw, pitch, roll = results["face_poses"][idx] * 180. / np.pi
                             bbox = results["bboxes"][idx].astype(int)
                             frame_diagonal = np.linalg.norm(frame.shape[:2])
-                            font_scale = max(0.5, frame_diagonal / 2000.)
-                            thickness = np.round(2.0 * font_scale)
+                            font_scale = max(0.3, frame_diagonal / 2000.)
+                            thickness = int(max(1, np.round(2.0 * font_scale)))
                             cv2.putText(
                                 frame,
-                                f"Yaw:{yaw:.01f}, Pitch:{pitch:.01f}, Roll:{roll:.01f}",
-                                (bbox[0] - 100, bbox[3] + 50),
+                                f"Yaw:{int(yaw)}  Pitch:{int(pitch)}  Roll:{int(roll)}",
+                                (bbox[0] - 100, bbox[3] + int(0.15*(bbox[3]-bbox[1]))),
                                 cv2.FONT_HERSHEY_SIMPLEX,
                                 fontScale=font_scale,
                                 color=(0, 0, 180),
