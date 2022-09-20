@@ -29,7 +29,7 @@ def bbox2point(bbox):
     return size, center
 
 
-def check_light(light_params: np.array, threshold: float=20.) -> bool:
+def check_light(light_params: np.array, threshold: float=15.) -> bool:
     """
     light_params: (27,), lighting parameters
     """
@@ -38,7 +38,7 @@ def check_light(light_params: np.array, threshold: float=20.) -> bool:
     
 
 def check_2d_landmarks(
-    gt_landmarks: np.array, pred_landmarks: np.array, threshold: float=0.5,
+    gt_landmarks: np.array, pred_landmarks: np.array, threshold: float=0.2,
 ) -> bool:
     """
     gt_landmarks: (n_lmk, 2), ground truth 2D landmarks
