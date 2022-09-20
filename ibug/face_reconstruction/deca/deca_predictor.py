@@ -4,7 +4,7 @@ import numpy as np
 
 from collections import OrderedDict
 from types import SimpleNamespace
-from typing import Union, Optional, Dict
+from typing import Union, Optional, Dict, List
 
 from .deca import DecaCoarse
 from .deca_utils import (
@@ -135,7 +135,7 @@ class DecaCoarsePredictor(object):
     @torch.no_grad()
     def __call__(
         self, image: np.ndarray, landmarks: np.ndarray, rgb: bool=True,
-    ) -> Union[Dict, None]:
+    ) -> List[Dict]:
         if landmarks.size > 0:
             if rgb:
                 image = image[..., ::-1]
@@ -192,25 +192,30 @@ class DecaCoarsePredictor(object):
             vertices[..., 1:] = -vertices[..., 1:]
 
             # Recover to the original image space
-            h, w = image.shape[:2]
             batch_inv_tform = torch.inverse(batch_tform).transpose(1,2).to(self.device)
 
             landmarks2d = transform_to_image_space(landmarks2d, batch_inv_tform, self.config.input_size)
             landmarks3d = transform_to_image_space(landmarks3d, batch_inv_tform, self.config.input_size)
             vertices = transform_to_image_space(vertices, batch_inv_tform, self.config.input_size)
-        
-            return {
-                "bboxes": bboxes, # (bs, 4)
-                "params_dict": {k:v.cpu().numpy() for k, v in params_dict.items()},
-                "vertices": vertices.cpu().numpy(), # (bs, nv, 3)
-                "landmarks2d": landmarks2d.cpu().numpy(), # (bs, n_lmk, 2)
-                "landmarks3d": landmarks3d.cpu().numpy(), # (bs, n_lmk, 3)
-                "vertices_world": vertices_world.cpu().numpy(), # (bs, nv, 3)
-                "landmarks3d_world": landmarks3d_world.cpu().numpy(), # (bs, n_lmk, 3)
-                "face_poses": face_poses.cpu().numpy(), # (bs, 3)
-            }
+
+            batch_size = landmarks.shape[0]
+            results = []
+            for i in range(batch_size):
+                results.append(
+                    {
+                        "bboxes": bboxes[i], # (4,)
+                        "params_dict": {k:v[i].cpu().numpy() for k, v in params_dict.items()},
+                        "vertices": vertices[i].cpu().numpy(), # (nv, 3)
+                        "landmarks2d": landmarks2d[i].cpu().numpy(), # (n_lmk, 2)
+                        "landmarks3d": landmarks3d[i].cpu().numpy(), # (n_lmk, 3)
+                        "vertices_world": vertices_world[i].cpu().numpy(), # (nv, 3)
+                        "landmarks3d_world": landmarks3d_world[i].cpu().numpy(), # (n_lmk, 3)
+                        "face_poses": face_poses[i].cpu().numpy(), # (3,)
+                    }
+                )
+            return results
         else:
-            return None
+            return []
 
     def parse_parameters(self, parameters: torch.tensor) -> Dict:
         """

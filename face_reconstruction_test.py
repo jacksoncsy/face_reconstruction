@@ -8,6 +8,7 @@ from ibug.face_alignment import FANPredictor
 from ibug.face_alignment.utils import plot_landmarks
 from ibug.face_detection import RetinaFacePredictor
 from ibug.face_reconstruction import DecaCoarsePredictor
+from ibug.face_reconstruction.deca.deca_utils import check_2d_landmarks, check_light
 
 
 def main() -> None:
@@ -43,13 +44,17 @@ def main() -> None:
         help="Device to be used for face reconstruction (default=cuda:0)",
     )
     parser.add_argument(
+        "--disable-sanity-check", "-dsc", action="store_true", default=False,
+        help="Enable sanity check to the reconstruction results",
+    )       
+    parser.add_argument(
         "--show-reconstruction-bbox", "-srb", action="store_true", default=False,
         help="Do not visualise bbox for face reconstruction",
     )
     parser.add_argument(
         "--show-reconstruction-landmarks2d", "-sr2d", action="store_true", default=False,
         help="Do not visualise 2D-style landmarks from face reconstruction",
-    )
+    ) 
     parser.add_argument(
         "--hide-reconstruction-pose", "-hrp", action="store_true", default=False,
         help="Do not visualise estimated pose from face reconstruction",
@@ -136,8 +141,26 @@ def main() -> None:
 
                 # Face reconstruction
                 start_time = time.time()
-                results = face_reconstructor(frame, landmarks, rgb=True)
+                reconstruction_results = face_reconstructor(frame, landmarks, rgb=True)
                 face_reconstruction_time = time.time() - start_time
+
+                # perform sanity check to the results
+                if not args.disable_sanity_check:
+                    valid_indices = []
+                    for idx, result in enumerate(reconstruction_results):
+                        # check whether the lighting is reasonably predicted
+                        valid_light = check_light(result["params_dict"]["light"])
+                        # check whether 2D landmarks (only use internal points) are reasonably predicted
+                        landmark_indices = np.arange(17, 68)
+                        valid_2d_landmarks = check_2d_landmarks(
+                            landmarks[idx][landmark_indices],
+                            result["landmarks2d"][landmark_indices],
+                        )
+                        # passed if all are fine
+                        if valid_light and valid_2d_landmarks:
+                            valid_indices.append(idx)
+                    # filter the results
+                    reconstruction_results = [reconstruction_results[idx] for idx in valid_indices]
 
                 # Textural output
                 total_time = 1000.0 * sum([face_detection_time, face_alignment_time, face_reconstruction_time])
@@ -145,35 +168,33 @@ def main() -> None:
                 print(f"3D face reconstruction took {face_reconstruction_time * 1000.0:.02f} ms.")
 
                 # Rendering
-                if results is not None:
-                    n_faces = results["vertices"].shape[0]
-                    for idx in range(n_faces):
-                        if args.show_reconstruction_bbox:
-                            bbox = results["bboxes"][idx].astype(int)
-                            cv2.rectangle(frame, (bbox[0], bbox[1]), (bbox[2], bbox[3]), color=(0, 0, 255), thickness=2)
-                        if args.show_reconstruction_landmarks2d:
-                            landmarks2d = results["landmarks2d"][idx]
-                            plot_landmarks(frame, landmarks2d, line_colour=(255, 0, 0))
-                        if not args.hide_reconstruction_landmarks3d:
-                            landmarks3d = results["landmarks3d"][idx, :, :2]
-                            plot_landmarks(frame, landmarks3d)
-                        if not args.hide_reconstruction_pose:
-                            yaw, pitch, roll = results["face_poses"][idx] * 180. / np.pi
-                            bbox = results["bboxes"][idx].astype(int)
-                            frame_diagonal = np.linalg.norm(frame.shape[:2])
-                            text_x = int(max(0, bbox[0] - frame_diagonal / 20.))
-                            text_y = int(min(frame.shape[0] - 1, bbox[3] + 0.15*(bbox[3]-bbox[1])))
-                            font_scale = max(0.3, frame_diagonal / 2000.)
-                            thickness = int(max(1, np.round(2.0 * font_scale)))
-                            cv2.putText(
-                                frame,
-                                f"Yaw:{int(yaw)}  Pitch:{int(pitch)}  Roll:{int(roll)}",
-                                (text_x, text_y),
-                                cv2.FONT_HERSHEY_SIMPLEX,
-                                fontScale=font_scale,
-                                color=(0, 0, 180),
-                                thickness=thickness,
-                            )
+                for result in reconstruction_results:
+                    if args.show_reconstruction_bbox:
+                        bbox = result["bboxes"].astype(int)
+                        cv2.rectangle(frame, (bbox[0], bbox[1]), (bbox[2], bbox[3]), color=(0, 0, 255), thickness=2)
+                    if args.show_reconstruction_landmarks2d:
+                        landmarks2d = result["landmarks2d"]
+                        plot_landmarks(frame, landmarks2d, line_colour=(255, 0, 0))
+                    if not args.hide_reconstruction_landmarks3d:
+                        landmarks3d = result["landmarks3d"][:, :2]
+                        plot_landmarks(frame, landmarks3d)
+                    if not args.hide_reconstruction_pose:
+                        yaw, pitch, roll = result["face_poses"] * 180. / np.pi
+                        bbox = result["bboxes"].astype(int)
+                        frame_diagonal = np.linalg.norm(frame.shape[:2])
+                        text_x = int(max(0, bbox[0] - frame_diagonal / 20.))
+                        text_y = int(min(frame.shape[0] - 1, bbox[3] + 0.15*(bbox[3]-bbox[1])))
+                        font_scale = max(0.3, frame_diagonal / 2000.)
+                        thickness = int(max(1, np.round(2.0 * font_scale)))
+                        cv2.putText(
+                            frame,
+                            f"Yaw:{int(yaw)}  Pitch:{int(pitch)}  Roll:{int(roll)}",
+                            (text_x, text_y),
+                            cv2.FONT_HERSHEY_SIMPLEX,
+                            fontScale=font_scale,
+                            color=(0, 0, 180),
+                            thickness=thickness,
+                        )
 
                 # Write the frame to output video (if recording)
                 if out_vid is not None:

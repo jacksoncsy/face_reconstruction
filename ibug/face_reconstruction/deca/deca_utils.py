@@ -1,10 +1,11 @@
 import numpy as np
 import torch
 
-from skimage.transform import estimate_transform, warp
+from skimage.transform import estimate_transform, warp, _geometric
+from typing import Union
 
 
-def batch_orth_proj(X, camera):
+def batch_orth_proj(X: torch.tensor, camera: torch.tensor) -> torch.tensor:
     ''' orthgraphic projection
         X:  3d vertices, [bz, n_point, 3]
         camera: scale and translation, [bz, 3], [scale, tx, ty]
@@ -28,7 +29,33 @@ def bbox2point(bbox):
     return size, center
 
 
-def compute_similarity_transform(src_size, src_center, crop_size, scale=1.25):
+def check_light(light_params: np.array, threshold: float=20.) -> bool:
+    """
+    light_params: (27,), lighting parameters
+    """
+    # abnormal lighting prediction usually results in extremely large values
+    return False if np.mean(light_params[:3]) >= threshold else True
+    
+
+def check_2d_landmarks(
+    gt_landmarks: np.array, pred_landmarks: np.array, threshold: float=0.5,
+) -> bool:
+    """
+    gt_landmarks: (n_lmk, 2), ground truth 2D landmarks
+    pred_landmarks: (n_lmk, 2), predicted 2D landmarks
+    """
+    # compute normalise RMSE
+    face_diagonal = np.linalg.norm(np.max(gt_landmarks, axis=0) - np.min(gt_landmarks, axis=0))
+    rmse = np.mean(np.linalg.norm(gt_landmarks - pred_landmarks, axis=1))
+    return False if rmse / face_diagonal >= threshold else True
+
+
+def compute_similarity_transform(
+    src_size: Union[float, int],
+    src_center: np.array,
+    crop_size: int,
+    scale: float=1.25,
+) -> _geometric.GeometricTransform:
     size = int(src_size * scale)
     src_pts = np.array([
         [src_center[0] - size / 2, src_center[1] - size / 2],
@@ -46,7 +73,7 @@ def compute_similarity_transform(src_size, src_center, crop_size, scale=1.25):
     return tform
 
 
-def parse_bbox_from_landmarks(landmarks):
+def parse_bbox_from_landmarks(landmarks: np.array):
     left = np.min(landmarks[:, 0])
     right = np.max(landmarks[:, 0])
     top = np.min(landmarks[:, 1])
@@ -55,11 +82,15 @@ def parse_bbox_from_landmarks(landmarks):
     return bbox
 
 
-def transform_image(image, tform, crop_size):
+def transform_image(
+    image: np.array, tform: _geometric.GeometricTransform, crop_size: int,
+) -> np.array:
     return warp(image, tform.inverse, output_shape=(crop_size, crop_size))
 
 
-def transform_to_image_space(points, tform, crop_size):
+def transform_to_image_space(
+    points: torch.tensor, tform: torch.tensor, crop_size: int,
+) -> torch.tensor:
     last_dim = points.shape[-1]
     assert last_dim == 2 or last_dim == 3
 
@@ -83,3 +114,4 @@ def transform_to_image_space(points, tform, crop_size):
         trans_points = torch.cat([trans_points_2d[..., :2], z_coords], dim=-1)
     
     return trans_points
+
