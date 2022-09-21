@@ -23,11 +23,11 @@ pip install -e .
 2. Download the 3DMMs assets \
     (a) Download [FLAME](https://flame.is.tue.mpg.de/download.php), choose **FLAME 2020** and unzip it, move **generic_model.pkl** into ./ibug/face_reconstruction/deca/assets/flame  \
     (b) Download [FLAME landmark asset](https://github.com/YadiraF/DECA/blob/master/data/landmark_embedding.npy), and move it into ./ibug/face_reconstruction/deca/assets/flame \
-    (c) (Optional) Download [AR models](manifold://peopleai_face_eng_resources/tree/facescan/AR_multilinear.bin) and [assets](manifold://behavioural-computing-workflows/tree/users/shiyangc/face_reconstruction/deca/assets/ar_multilinear), and move them into ./ibug/face_reconstruction/deca/assets/ar_multilinear  
+    (c) (Optional) Download AR models and assets, and move them into ./ibug/face_reconstruction/deca/assets/ar_multilinear  
 
 3. Download the pretrained models \
     (a) Download the [FLAME-based pretrained models](https://drive.google.com/drive/folders/1Gke3AwvtHvukz4XxGC4PwwgpFALR_xUL?usp=sharing), and put them into ./ibug/face_reconstruction/deca/weights  \
-    (b) (Optional) Download the [AR-based pretrained models](manifold://behavioural-computing-workflows/tree/users/shiyangc/face_reconstruction/deca/weights), and put them into ./ibug/face_reconstruction/deca/weights
+    (b) (Optional) Download the AR-based pretrained models, and put them into ./ibug/face_reconstruction/deca/weights
 
 ## How to Test
 * To test on live video: `python face_reconstruction_test.py [-i webcam_index]`
