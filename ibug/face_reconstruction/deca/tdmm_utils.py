@@ -58,7 +58,7 @@ def batch_rigid_transform(rot_mats, joints, parents):
     return posed_joints, rel_transforms
 
 
-def batch_rodrigues(rot_vecs, dtype=torch.float32):
+def batch_rodrigues(rot_vecs, dtype: torch.dtype = torch.float32):
     ''' Calculates the rotation matrices for a batch of rotation vectors
         Parameters
         ----------
@@ -80,18 +80,17 @@ def batch_rodrigues(rot_vecs, dtype=torch.float32):
 
     # Bx1 arrays
     rx, ry, rz = torch.split(rot_dir, 1, dim=1)
-    K = torch.zeros((batch_size, 3, 3), dtype=dtype, device=device)
-
     zeros = torch.zeros((batch_size, 1), dtype=dtype, device=device)
-    K = torch.cat([zeros, -rz, ry, rz, zeros, -rx, -ry, rx, zeros], dim=1) \
-        .view((batch_size, 3, 3))
+    K = torch.cat(
+        [zeros, -rz, ry, rz, zeros, -rx, -ry, rx, zeros], dim=1
+    ).view((batch_size, 3, 3))
 
     ident = torch.eye(3, dtype=dtype, device=device).unsqueeze(dim=0)
     rot_mat = ident + sin * K + (1 - cos) * torch.bmm(K, K)
     return rot_mat
 
 
-def batch_rotvec2matrix(rot_vecs, dtype=torch.float32):
+def batch_rotvec2matrix(rot_vecs, dtype: torch.dtype = torch.float32):
     ''' Calculates the rotation matrices for a batch of rotation vectors
         Parameters
         ----------
@@ -155,8 +154,8 @@ def lbs(
     J_regressor,
     parents,
     lbs_weights,
-    pose2rot=True,
-    dtype=torch.float32,
+    pose2rot: bool = True,
+    dtype: torch.dtype = torch.float32,
 ):
     ''' Performs Linear Blend Skinning with the given shape and pose parameters
 
@@ -312,18 +311,21 @@ def matrix2angle(rot_mat):
         y: pitch
         z: roll
     """
+    dtype = rot_mat.dtype
+    # TODO: The following line fails for JIT scripting
+    # RuntimeError: CUDA error: device-side assert triggered
     if -1.0 < rot_mat[2, 0] < 1.0:
         x = -torch.asin(rot_mat[2, 0])    # It is minus in the reference
         y = torch.atan2(rot_mat[2, 1] / torch.cos(x), rot_mat[2, 2] / torch.cos(x))
         z = torch.atan2(rot_mat[1, 0] / torch.cos(x), rot_mat[0, 0] / torch.cos(x))
     else:
         # Gimbal lock
-        z = 0   # can be anything
+        z = torch.zeros(1, dtype=dtype)  # can be anything
         if rot_mat[2, 0] == -1:
-            x = torch.from_numpy(np.pi / 2)
+            x = torch.acos(torch.zeros(1, dtype=dtype))  # pi/2
             y = z + torch.atan2(rot_mat[0, 1], rot_mat[0, 2])
         else:
-            x = torch.from_numpy(-np.pi / 2)
+            x = -torch.acos(torch.zeros(1, dtype=dtype))  # -pi/2
             y = -z + torch.atan2(-rot_mat[0, 1], -rot_mat[0, 2])
 
     return x, y, z
@@ -339,7 +341,7 @@ def rot_mat_to_euler(rot_mats):
     return torch.atan2(-rot_mats[:, 2, 0], sy)
 
 
-def to_tensor(array, dtype=torch.float32):
+def to_tensor(array, dtype: torch.dtype = torch.float32):
     if isinstance(array, torch.Tensor):
         return array
     else:
@@ -362,7 +364,7 @@ def transform_mat(R, t):
     '''
     # No padding left or right, only add an extra row
     return torch.cat(
-        [F.pad(R, [0, 0, 0, 1]), F.pad(t, [0, 0, 0, 1], value=1)],
+        [F.pad(R, [0, 0, 0, 1]), F.pad(t, [0, 0, 0, 1], value=1.)],
         dim=2,
     )
 

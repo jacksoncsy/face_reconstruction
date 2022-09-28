@@ -51,22 +51,26 @@ class DecaCoarsePredictor(object):
         self.predictor_config = predictor_config
         
         # load network to predict parameters
-        self.net = DecaCoarse(config=self.model_config.settings).to(self.device)
+        self.net = DecaCoarse(config=self.model_config.settings)
         self.net.load_state_dict(
             torch.load(self.model_config.weight_path, map_location=self.device)["state_dict"]
         )
         self.net.eval()
         
         # load 3DMM and other related assets
-        self.tdmm = DecaCoarsePredictor.load_tdmm(self.model_config.settings).to(self.device)
+        self.tdmm = DecaCoarsePredictor.load_tdmm(self.model_config.settings)
         self.tdmm.eval()
 
         if self.predictor_config.use_jit:
             input_size = self.model_config.settings.input_size
             self.net = torch.jit.trace(
                 self.net,
-                torch.rand(1, 3, input_size, input_size).to(self.device),
+                torch.rand(1, 3, input_size, input_size),
             )
+            self.tdmm = torch.jit.script(self.tdmm)
+
+        self.net.to(self.device)
+        self.tdmm.to(self.device)
 
     @staticmethod
     def create_model_config(name: str="ar_res50_coarse") -> ModelConfig:

@@ -107,7 +107,7 @@ class ARMultilinear(nn.Module):
         return u_core, u_id, u_exp
 
     def _find_dynamic_lmk_idx_and_bcoords(
-        self, pose, dynamic_lmk_faces_idx, dynamic_lmk_b_coords, dtype=torch.float32,
+        self, pose, dynamic_lmk_faces_idx, dynamic_lmk_b_coords, dtype: torch.dtype = torch.float32,
     ):
         """
             Selects the face contour depending on the reletive position of the head
@@ -142,7 +142,7 @@ class ARMultilinear(nn.Module):
         )
         return landmarks3d
 
-    def get_euler_angles(self, pose_params, dtype=torch.float32):
+    def get_euler_angles(self, pose_params, dtype: torch.dtype = torch.float32):
         """
             Input:
                 pose_params: (bs, 6)
@@ -183,10 +183,10 @@ class ARMultilinear(nn.Module):
         # (N, 53)
         exp_tensor = torch.cat(
             [
-                1 - torch.sum(expression_params, axis=1, keepdim=True),
+                1 - torch.sum(expression_params, dim=1, keepdim=True),
                 expression_params,
             ],
-            axis=1,
+            dim=1,
         )
         # (N, 1, 50), project expression parameters
         w_exp = torch.matmul(exp_tensor, self.u_exp)[:, None]
@@ -330,7 +330,7 @@ class FLAME(nn.Module):
         self.register_buffer('neck_kin_chain', torch.stack(neck_kin_chain))
         
     def _find_dynamic_lmk_idx_and_bcoords(
-        self, pose, dynamic_lmk_faces_idx, dynamic_lmk_b_coords, neck_kin_chain, dtype=torch.float32,
+        self, pose, dynamic_lmk_faces_idx, dynamic_lmk_b_coords, neck_kin_chain, dtype: torch.dtype = torch.float32,
     ):
         """
             Selects the face contour depending on the reletive position of the head
@@ -390,7 +390,7 @@ class FLAME(nn.Module):
         )
         return landmarks3d
 
-    def get_euler_angles(self, pose_params, dtype=torch.float32):
+    def get_euler_angles(self, pose_params, dtype: torch.dtype = torch.float32):
         """
             Input:
                 pose_params:  (bs, 6)
