@@ -3,10 +3,10 @@ import torch
 import numpy as np
 
 from collections import OrderedDict
-from types import SimpleNamespace
+from dataclasses import dataclass
 from typing import Union, Optional, Dict, List
 
-from .deca import DecaCoarse
+from .deca import DecaCoarse, DecaSettings
 from .deca_utils import (
     batch_orth_proj,
     bbox2point,
@@ -21,50 +21,60 @@ from .tdmm import FLAME, ARMultilinear
 __all__ = ["DecaCoarsePredictor"]
 
 
+@dataclass
+class ModelConfig:
+    weight_path: str
+    settings: DecaSettings
+
+
+@dataclass
+class PredictorConfig:
+    use_jit: bool
+
+
 class DecaCoarsePredictor(object):
     def __init__(
         self, 
         device: Union[str, torch.device]="cuda:0",
-        model_config: Optional[SimpleNamespace]=None,
-        predictor_config: Optional[SimpleNamespace]=None,
+        model_config: Optional[ModelConfig]=None,
+        predictor_config: Optional[PredictorConfig]=None,
     ) -> None:
         self.device = device
         # all the settings for the network and the corresponding 3DMMs
         if model_config is None:
             model_config = DecaCoarsePredictor.create_model_config()
+        self.model_config = model_config
+        
         # all the other settings for the predictor 
         if predictor_config is None:
             predictor_config = DecaCoarsePredictor.create_predictor_config()
+        self.predictor_config = predictor_config
         
-        self.config = SimpleNamespace(
-            **model_config.settings.__dict__,
-            **predictor_config.__dict__,
-        )
-
         # load network to predict parameters
-        self.net = DecaCoarse(config=self.config).to(self.device)
+        self.net = DecaCoarse(config=self.model_config.settings).to(self.device)
         self.net.load_state_dict(
-            torch.load(model_config.weight_path, map_location=self.device)["state_dict"]
+            torch.load(self.model_config.weight_path, map_location=self.device)["state_dict"]
         )
         self.net.eval()
         
         # load 3DMM and other related assets
-        self.tdmm = DecaCoarsePredictor.load_tdmm(self.config).to(self.device)
+        self.tdmm = DecaCoarsePredictor.load_tdmm(self.model_config.settings).to(self.device)
         self.tdmm.eval()
 
-        if self.config.use_jit:
+        if self.predictor_config.use_jit:
+            input_size = self.model_config.settings.input_size
             self.net = torch.jit.trace(
                 self.net,
-                torch.rand(1, 3, self.config.input_size, self.config.input_size).to(self.device),
+                torch.rand(1, 3, input_size, input_size).to(self.device),
             )
 
     @staticmethod
-    def create_model_config(name: str="ar_res50_coarse") -> SimpleNamespace:
+    def create_model_config(name: str="ar_res50_coarse") -> ModelConfig:
         name = name.lower()
         if name == "ar_res50_coarse":
-            return SimpleNamespace(
+            return ModelConfig(
                 weight_path=os.path.join(os.path.dirname(__file__), "weights/ar_res50_coarse.pth"),
-                settings=SimpleNamespace(
+                settings=DecaSettings(
                     tdmm_type="ar",
                     backbone="resnet50",
                     input_size=224,
@@ -74,9 +84,9 @@ class DecaCoarsePredictor(object):
                 ),
             )
         elif name == "ar_mbv2_coarse":
-            return SimpleNamespace(
+            return ModelConfig(
                 weight_path=os.path.join(os.path.dirname(__file__), "weights/ar_mbv2_coarse.pth"),
-                settings=SimpleNamespace(
+                settings=DecaSettings(
                     tdmm_type="ar",
                     backbone="mobilenetv2",
                     input_size=224,
@@ -86,9 +96,9 @@ class DecaCoarsePredictor(object):
                 ),
             )
         elif name == "flame_res50_coarse":
-            return SimpleNamespace(
+            return ModelConfig(
                 weight_path=os.path.join(os.path.dirname(__file__), "weights/flame_res50_coarse.pth"),
-                settings=SimpleNamespace(
+                settings=DecaSettings(
                     tdmm_type="flame",
                     backbone="resnet50",
                     input_size=224,
@@ -98,9 +108,9 @@ class DecaCoarsePredictor(object):
                 ),
             )
         elif name == "flame_mbv2_coarse":
-            return SimpleNamespace(
+            return ModelConfig(
                 weight_path=os.path.join(os.path.dirname(__file__), "weights/flame_mbv2_coarse.pth"),
-                settings=SimpleNamespace(
+                settings=DecaSettings(
                     tdmm_type="flame",
                     backbone="mobilenetv2",
                     input_size=224,
@@ -113,11 +123,11 @@ class DecaCoarsePredictor(object):
             raise ValueError(f"Unknown model name: {name}")
     
     @staticmethod
-    def create_predictor_config(use_jit: bool=True) -> SimpleNamespace:
-        return SimpleNamespace(use_jit=use_jit)
+    def create_predictor_config(use_jit: bool=True) -> PredictorConfig:
+        return PredictorConfig(use_jit=use_jit)
     
     @staticmethod
-    def load_tdmm(config: SimpleNamespace) -> Union[ARMultilinear, FLAME]:
+    def load_tdmm(config: DecaSettings) -> Union[ARMultilinear, FLAME]:
         tdmm_type = config.tdmm_type.lower()
         if tdmm_type == "ar":
             tdmm = ARMultilinear(os.path.join(os.path.dirname(__file__), "assets/ar_multilinear"))
@@ -147,14 +157,15 @@ class DecaCoarsePredictor(object):
             bboxes = []
             batch_face = []
             batch_tform = []
+            input_size = self.model_config.settings.input_size
             for lms in landmarks:
                 bbox = parse_bbox_from_landmarks(lms)
                 bboxes.append(bbox)
                 src_size, src_center = bbox2point(bbox)
                 # move the detected face to a standard frame
-                tform = compute_similarity_transform(src_size, src_center, self.config.input_size)
+                tform = compute_similarity_transform(src_size, src_center, input_size)
                 batch_tform.append(tform.params)
-                crop_image = transform_image_cv2(image / 255., tform, self.config.input_size)
+                crop_image = transform_image_cv2(image / 255., tform, input_size)
                 batch_face.append(crop_image)
 
             # (bs, 4)
@@ -194,9 +205,9 @@ class DecaCoarsePredictor(object):
             # Recover to the original image space
             batch_inv_tform = torch.inverse(batch_tform).transpose(1,2).to(self.device)
 
-            landmarks2d = transform_to_image_space(landmarks2d, batch_inv_tform, self.config.input_size)
-            landmarks3d = transform_to_image_space(landmarks3d, batch_inv_tform, self.config.input_size)
-            vertices = transform_to_image_space(vertices, batch_inv_tform, self.config.input_size)
+            landmarks2d = transform_to_image_space(landmarks2d, batch_inv_tform, input_size)
+            landmarks3d = transform_to_image_space(landmarks3d, batch_inv_tform, input_size)
+            vertices = transform_to_image_space(vertices, batch_inv_tform, input_size)
 
             batch_size = landmarks.shape[0]
             results = []
@@ -223,7 +234,7 @@ class DecaCoarsePredictor(object):
         """
         params_dict = {}
         curr_i = 0
-        for k, v in self.config.coarse_parameters.items():
+        for k, v in self.model_config.settings.coarse_parameters.items():
             params_dict[k] = parameters[:, curr_i:curr_i+v]
             curr_i += v
         

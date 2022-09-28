@@ -1,8 +1,9 @@
 import math
 import torch.nn as nn
 
-from typing import Callable, Optional, List
+from typing import Callable, Optional, List, OrderedDict
 from torch import Tensor
+from dataclasses import dataclass
 
 
 def _make_divisible(v: float, divisor: int, min_value: Optional[int] = None):
@@ -278,8 +279,16 @@ class Bottleneck(nn.Module):
         return out
 
 
+@dataclass
+class DecaSettings:
+    tdmm_type: str
+    backbone: str
+    input_size: int
+    coarse_parameters: OrderedDict
+
+
 class DecaCoarse(nn.Module):
-    def __init__(self, config):
+    def __init__(self, config: DecaSettings):
         super(DecaCoarse, self).__init__()
         self.output_size = sum(config.coarse_parameters.values())
         if config.backbone == "resnet50":
