@@ -12,7 +12,7 @@ from .deca_utils import (
     bbox2point,
     compute_similarity_transform,
     parse_bbox_from_landmarks,
-    transform_image,
+    transform_image_cv2,
     transform_to_image_space,
 )
 from .tdmm import FLAME, ARMultilinear
@@ -154,7 +154,7 @@ class DecaCoarsePredictor(object):
                 # move the detected face to a standard frame
                 tform = compute_similarity_transform(src_size, src_center, self.config.input_size)
                 batch_tform.append(tform.params)
-                crop_image = transform_image(image / 255., tform, self.config.input_size)
+                crop_image = transform_image_cv2(image / 255., tform, self.config.input_size)
                 batch_face.append(crop_image)
 
             # (bs, 4)

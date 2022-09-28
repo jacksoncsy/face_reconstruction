@@ -1,5 +1,6 @@
 import numpy as np
 import torch
+import cv2
 
 from skimage.transform import estimate_transform, warp, _geometric
 from typing import Union
@@ -86,6 +87,18 @@ def transform_image(
     image: np.array, tform: _geometric.GeometricTransform, crop_size: int,
 ) -> np.array:
     return warp(image, tform.inverse, output_shape=(crop_size, crop_size))
+
+
+def transform_image_cv2(
+    image: np.array, tform: _geometric.GeometricTransform, crop_size: int,
+) -> np.array:
+    return cv2.warpAffine(
+        image,
+        tform.params[:2],
+        (crop_size, crop_size),
+        flags=cv2.INTER_LINEAR,
+        borderMode=cv2.BORDER_CONSTANT,
+    )
 
 
 def transform_to_image_space(
