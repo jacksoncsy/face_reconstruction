@@ -1,5 +1,8 @@
-import os
 import cv2
+import gzip
+import pickle
+import os
+import os.path as osp
 import time
 import torch
 import numpy as np
@@ -21,6 +24,10 @@ def main() -> None:
     parser.add_argument(
         "--output", "-o", default=None,
         help="Output filename and path",
+    )
+    parser.add_argument(
+        "--output-results", "-or", default=None,
+        help="Path to save the reconstruction results",
     )
     parser.add_argument(
         "--fourcc", "-f", type=str, default="mp4v", 
@@ -195,6 +202,12 @@ def main() -> None:
                             color=(0, 0, 180),
                             thickness=thickness,
                         )
+
+                if args.output_results is not None:
+                    if not osp.isdir(args.output_results):
+                        os.makedirs(args.output_results, exist_ok=True)
+                    with gzip.open(osp.join(args.output_results, f"{frame_number:08d}.pkl.gz"), "wb") as f:
+                        pickle.dump(reconstruction_results, f)
 
                 # Write the frame to output video (if recording)
                 if out_vid is not None:
