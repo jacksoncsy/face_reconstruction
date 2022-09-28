@@ -90,40 +90,6 @@ def batch_rodrigues(rot_vecs, dtype: torch.dtype = torch.float32):
     return rot_mat
 
 
-def batch_rotvec2matrix(rot_vecs, dtype: torch.dtype = torch.float32):
-    ''' Calculates the rotation matrices for a batch of rotation vectors
-        Parameters
-        ----------
-        rot_vecs: torch.tensor Nx3
-            array of N axis-angle vectors
-        Returns
-        -------
-        R: torch.tensor Nx3x3
-            The rotation matrices for the given axis-angle parameters
-    '''
-    batch_size = rot_vecs.shape[0]
-    device = rot_vecs.device
-
-    angle = torch.norm(rot_vecs + 1e-8, dim=1, keepdim=True)
-    rot_dir = rot_vecs / angle
-
-    cos = torch.unsqueeze(torch.cos(angle), dim=1)
-    sin = torch.unsqueeze(torch.sin(angle), dim=1)
-
-    # Bx1 arrays
-    rx, ry, rz = torch.split(rot_dir, 1, dim=1)
-    K = torch.zeros((batch_size, 3, 3), dtype=dtype, device=device)
-
-    zeros = torch.zeros((batch_size, 1), dtype=dtype, device=device)
-    K = torch.cat(
-        [zeros, -rz, ry, rz, zeros, -rx, -ry, rx, zeros], dim=1,
-    ).view((batch_size, 3, 3))
-
-    ident = torch.eye(3, dtype=dtype, device=device).unsqueeze(dim=0)
-    rot_mat = ident + sin * K + (1 - cos) * torch.bmm(K, K)
-    return rot_mat
-
-
 def blend_shapes(betas, shape_disps):
     ''' Calculates the per vertex displacement due to the blend shapes
     Parameters
@@ -311,21 +277,19 @@ def matrix2angle(rot_mat):
         y: pitch
         z: roll
     """
-    dtype = rot_mat.dtype
-    # TODO: The following line fails for JIT scripting
-    # RuntimeError: CUDA error: device-side assert triggered
+    # The following line might fail for JIT scripting for pytorch < 1.10.1
     if -1.0 < rot_mat[2, 0] < 1.0:
         x = -torch.asin(rot_mat[2, 0])    # It is minus in the reference
         y = torch.atan2(rot_mat[2, 1] / torch.cos(x), rot_mat[2, 2] / torch.cos(x))
         z = torch.atan2(rot_mat[1, 0] / torch.cos(x), rot_mat[0, 0] / torch.cos(x))
     else:
         # Gimbal lock
-        z = torch.zeros(1, dtype=dtype)  # can be anything
+        z = torch.zeros(1, dtype=rot_mat.dtype)  # can be anything
         if rot_mat[2, 0] == -1:
-            x = torch.acos(torch.zeros(1, dtype=dtype))  # pi/2
+            x = torch.acos(torch.zeros(1))  # pi/2
             y = z + torch.atan2(rot_mat[0, 1], rot_mat[0, 2])
         else:
-            x = -torch.acos(torch.zeros(1, dtype=dtype))  # -pi/2
+            x = -torch.acos(torch.zeros(1))  # -pi/2
             y = -z + torch.atan2(-rot_mat[0, 1], -rot_mat[0, 2])
 
     return x, y, z

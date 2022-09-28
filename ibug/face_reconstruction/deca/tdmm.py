@@ -6,7 +6,6 @@ import os.path as osp
 
 from .tdmm_utils import (
     batch_rodrigues,
-    batch_rotvec2matrix,
     lbs,
     load_obj,
     matrix2angle,
@@ -195,7 +194,7 @@ class ARMultilinear(nn.Module):
         vertices = m1.reshape(batch_size, -1, 3)
 
         # rotate the mesh globally using extrinsic camera matrix
-        R = batch_rotvec2matrix(pose_params[:, :3])
+        R = batch_rodrigues(pose_params[:, :3])
         vertices = torch.bmm(vertices, R.transpose(1, 2)) + pose_params[:, None, 3:]
         
         # (N, 51)
