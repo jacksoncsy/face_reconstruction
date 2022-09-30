@@ -191,15 +191,15 @@ def main() -> None:
                         frame_diagonal = np.linalg.norm(frame.shape[:2])
                         text_x = int(max(0, bbox[0] - frame_diagonal / 20.))
                         text_y = int(min(frame.shape[0] - 1, bbox[3] + 0.15*(bbox[3]-bbox[1])))
-                        font_scale = max(0.3, frame_diagonal / 2000.)
-                        thickness = int(max(1, np.round(2.0 * font_scale)))
+                        font_scale = max(0.4, frame_diagonal / 1500.)
+                        thickness = int(max(1, np.round(3.0 * font_scale)))
                         cv2.putText(
                             frame,
-                            f"Yaw:{int(yaw)}  Pitch:{int(pitch)}  Roll:{int(roll)}",
+                            f"Yaw:{int(yaw)};Pitch:{int(pitch)};Roll:{int(roll)}",
                             (text_x, text_y),
                             cv2.FONT_HERSHEY_SIMPLEX,
                             fontScale=font_scale,
-                            color=(0, 0, 180),
+                            color=(0, 255, 0),
                             thickness=thickness,
                         )
 
