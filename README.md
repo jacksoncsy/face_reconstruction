@@ -2,11 +2,11 @@
 This repo has the inference codes for 3D face reconstruction based on [DECA](https://arxiv.org/pdf/2012.04012.pdf) with some pretrained weights. We currently support blendshape model [FLAME](https://flame.is.tue.mpg.de/index.html). 
 
 ## Prerequisites
-* [Numpy](https://www.numpy.org/): `$pip install numpy`
-* [OpenCV](https://opencv.org/): `$pip install opencv-python`
-* [PyTorch](https://pytorch.org/): `$pip install torch torchvision`
-* [scikit-image](https://scikit-image.org/): `$pip install scikit-image`
-* [Scipy](https://www.scipy.org/): `$pip install scipy`
+* [Numpy](https://www.numpy.org/): `pip install numpy`
+* [OpenCV](https://opencv.org/): `pip install opencv-python`
+* [PyTorch](https://pytorch.org/): `pip install torch torchvision`
+* [scikit-image](https://scikit-image.org/): `pip install scikit-image`
+* [Scipy](https://www.scipy.org/): `pip install scipy`
 ### Modules needed for test script
 * [ibug.face_detection](https://github.com/hhj1897/face_detection): See this repository for details: [https://github.com/hhj1897/face_detection](https://github.com/hhj1897/face_detection).
 * [ibug.face_alignment](https://github.com/hhj1897/face_alignment): See this repository for details: [https://github.com/hhj1897/face_alignment](https://github.com/hhj1897/face_alignment).
@@ -14,7 +14,7 @@ This repo has the inference codes for 3D face reconstruction based on [DECA](htt
 ## How to Install
 
 1. Install the code
-```
+```bash
 git clone https://github.com/jacksoncsy/face_reconstruction.git
 cd face_reconstruction
 pip install -e .
