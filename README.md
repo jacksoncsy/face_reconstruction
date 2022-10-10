@@ -1,6 +1,9 @@
 # ibug.face_reconstruction
 This repo has the inference codes for 3D face reconstruction based on [DECA](https://arxiv.org/pdf/2012.04012.pdf) with some pretrained weights. We currently support blendshape model [FLAME](https://flame.is.tue.mpg.de/index.html). 
 
+**\[Updates\]**
+ - `2022.10.11`: Support inference with AR linear model
+
 ## Prerequisites
 * [Numpy](https://www.numpy.org/): `pip install numpy`
 * [OpenCV](https://opencv.org/): `pip install opencv-python`
@@ -23,7 +26,8 @@ pip install -e .
 2. Download the 3DMMs assets \
     (a) Download [FLAME](https://flame.is.tue.mpg.de/download.php), choose **FLAME 2020** and unzip it, move **generic_model.pkl** into ./ibug/face_reconstruction/deca/assets/flame  \
     (b) Download [FLAME landmark asset](https://github.com/YadiraF/DECA/blob/master/data/landmark_embedding.npy), and move it into ./ibug/face_reconstruction/deca/assets/flame \
-    (c) (Optional) Download AR models and assets, and move them into ./ibug/face_reconstruction/deca/assets/ar_multilinear  
+    (c) (Optional) Download AR multilinear models and assets, and move them into ./ibug/face_reconstruction/deca/assets/ar_multilinear  
+    (d) (Optional) Download AR linear models and assets, and move them into ./ibug/face_reconstruction/deca/assets/ar_linear
 
 3. Download the pretrained models \
     (a) Download the [FLAME-based pretrained models](https://drive.google.com/drive/folders/1Gke3AwvtHvukz4XxGC4PwwgpFALR_xUL?usp=sharing), and put them into ./ibug/face_reconstruction/deca/weights  \
