@@ -15,7 +15,7 @@ from .deca_utils import (
     transform_image_cv2,
     transform_to_image_space,
 )
-from .tdmm import FLAME, ARMultilinear
+from .tdmm import FLAME, ARMultilinear, ARLinear
 
 
 __all__ = ["DecaCoarsePredictor"]
@@ -99,6 +99,30 @@ class DecaCoarsePredictor(object):
                     ),
                 ),
             )
+        elif name == "arl_res50_coarse":
+            return ModelConfig(
+                weight_path=os.path.join(os.path.dirname(__file__), "weights/arl_res50_coarse_test.pth"),
+                settings=DecaSettings(
+                    tdmm_type="arl",
+                    backbone="resnet50",
+                    input_size=224,
+                    coarse_parameters=OrderedDict(
+                        {"shape": 33, "tex": 23, "exp": 52, "pose": 6, "cam": 3, "light": 27}
+                    ),
+                ),
+            )
+        elif name == "arl_mbv2_coarse":
+            return ModelConfig(
+                weight_path=os.path.join(os.path.dirname(__file__), "weights/arl_mbv2_coarse.pth"),
+                settings=DecaSettings(
+                    tdmm_type="arl",
+                    backbone="mobilenetv2",
+                    input_size=224,
+                    coarse_parameters=OrderedDict(
+                        {"shape": 33, "tex": 23, "exp": 52, "pose": 6, "cam": 3, "light": 27}
+                    ),
+                ),
+            )            
         elif name == "flame_res50_coarse":
             return ModelConfig(
                 weight_path=os.path.join(os.path.dirname(__file__), "weights/flame_res50_coarse.pth"),
@@ -131,10 +155,12 @@ class DecaCoarsePredictor(object):
         return PredictorConfig(use_jit=use_jit)
     
     @staticmethod
-    def load_tdmm(config: DecaSettings) -> Union[ARMultilinear, FLAME]:
+    def load_tdmm(config: DecaSettings) -> Union[ARMultilinear, ARLinear, FLAME]:
         tdmm_type = config.tdmm_type.lower()
         if tdmm_type == "ar":
             tdmm = ARMultilinear(os.path.join(os.path.dirname(__file__), "assets/ar_multilinear"))
+        elif tdmm_type == "arl":
+            tdmm = ARLinear(os.path.join(os.path.dirname(__file__), "assets/ar_linear"))
         elif tdmm_type == "flame":
             tdmm = FLAME(
                 os.path.join(os.path.dirname(__file__), "assets/flame"),

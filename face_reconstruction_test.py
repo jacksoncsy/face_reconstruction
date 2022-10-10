@@ -44,7 +44,8 @@ def main() -> None:
     # arguments for face reconstruction
     parser.add_argument(
         "--reconstruction-weights", "-rw", default="flame_res50_coarse",
-        help="Pretrained weights (ar_res50_coarse, ar_mbv2_coarse, flame_res50_coarse or flame_mbv2_coarse)"
+        help="Pretrained weights (ar_res50_coarse, ar_mbv2_coarse, \
+            arl_res50_coarse, arl_mbv2_coarse, flame_res50_coarse or flame_mbv2_coarse)"
     )
     parser.add_argument(
         "--reconstruction-device", "-rd", default="cuda:0",
@@ -195,7 +196,7 @@ def main() -> None:
                         thickness = int(max(1, np.round(3.0 * font_scale)))
                         cv2.putText(
                             frame,
-                            f"Yaw:{int(yaw)};Pitch:{int(pitch)};Roll:{int(roll)}",
+                            f"Yaw:{int(yaw)} Pitch:{int(pitch)} Roll:{int(roll)}",
                             (text_x, text_y),
                             cv2.FONT_HERSHEY_SIMPLEX,
                             fontScale=font_scale,

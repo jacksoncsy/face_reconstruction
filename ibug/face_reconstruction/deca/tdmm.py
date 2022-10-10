@@ -17,6 +17,199 @@ from .tdmm_utils import (
 )
 
 
+class ARLinear(nn.Module):
+    def __init__(self, tdmm_dir):
+        super(ARLinear, self).__init__()
+
+        self.dtype = torch.float32
+        # load multilinear model bases
+        mean_shape, u_id, u_exp = self.load_basis(osp.join(tdmm_dir, "ar_linear_tdmm.pkl"))
+        self.register_buffer("mean_shape", torch.tensor(mean_shape, dtype=self.dtype))
+        self.register_buffer("u_id", torch.tensor(u_id, dtype=self.dtype))
+        self.register_buffer("u_exp", torch.tensor(u_exp, dtype=self.dtype))
+
+        # load template
+        verts, _, faces, _ = load_obj(osp.join(tdmm_dir, "base_det.obj"))
+        # vertices
+        self.register_buffer("v_template", verts)
+        # triangles
+        self.register_buffer("faces_tensor", faces)
+        # Triangulation
+        self.trilist = to_np(faces, dtype=np.int64)
+
+        # load static and dynamic landmark embeddings
+        self.load_landmark_embeddings(osp.join(tdmm_dir, "landmark_embedding.pkl"))
+
+    def load_landmark_embeddings(self, filepath):
+        lmk_embeddings = pickle.load(open(filepath, "rb"))
+        # (51,)
+        self.register_buffer(
+            "lmk_faces_idx", 
+            torch.from_numpy(lmk_embeddings["static_lmk_faces_idx"]).long(),
+        )
+        # (51, 3)
+        self.register_buffer(
+            "lmk_bary_coords",
+            torch.from_numpy(lmk_embeddings["static_lmk_bary_coords"]).to(self.dtype),
+        )
+        # (181, 17)
+        self.register_buffer(
+            "dynamic_lmk_faces_idx",
+            torch.from_numpy(lmk_embeddings["dynamic_lmk_faces_idx"]).long(),
+        )
+        # (181, 17, 3)
+        self.register_buffer(
+            "dynamic_lmk_bary_coords",
+            torch.from_numpy(lmk_embeddings["dynamic_lmk_bary_coords"]).to(self.dtype),
+        )
+        # (1, 68)
+        self.register_buffer(
+            "full_lmk_faces_idx",
+            torch.from_numpy(lmk_embeddings["full_lmk_faces_idx"]).long(),
+        )
+        # (1, 68, 3)
+        self.register_buffer(
+            "full_lmk_bary_coords",
+            torch.from_numpy(lmk_embeddings["full_lmk_bary_coords"]).to(self.dtype),
+        )
+        
+    def load_basis(self, model_path):
+        with open(model_path, "rb") as f:
+            tdmm_dict = pickle.load(f)
+
+            mean_shape = tdmm_dict["mean_shape"]
+            # (1, nv*3)
+            mean_shape = mean_shape.reshape(1, -1)
+
+            u_id = tdmm_dict["id_basis"]
+            # (33, nv*3)
+            u_id = u_id.reshape(u_id.shape[0], -1)
+
+            u_exp = tdmm_dict["exp_basis"]
+            # (52, nv*3)
+            u_exp = u_exp.reshape(u_exp.shape[0], -1)
+            
+        return mean_shape, u_id, u_exp
+
+    def _find_dynamic_lmk_idx_and_bcoords(
+        self, pose, dynamic_lmk_faces_idx, dynamic_lmk_b_coords, dtype: torch.dtype = torch.float32,
+    ):
+        """
+            Selects the face contour depending on the reletive position of the head
+            Input:
+                vertices: N X num_of_vertices X 3
+                pose: (N, 3)
+                dynamic_lmk_faces_idx: The list of contour face indexes
+                dynamic_lmk_b_coords: The list of contour barycentric weights
+                dtype: Data type
+            return:
+                The contour face indexes and the corresponding barycentric weights
+        """
+        # get yaw angle
+        # (N, 3, 3)
+        rot_mats = batch_rodrigues(pose, dtype=dtype)
+        # (N,), restrict the angle within [-90, 90]
+        yaw_angle = torch.round(
+            torch.clamp(rot_mat_to_euler(rot_mats)*180.0/np.pi, min=-90, max=90)
+        ).to(dtype=torch.long)
+        # select from the list
+        dyn_lmk_faces_idx = torch.index_select(dynamic_lmk_faces_idx, 0, yaw_angle + 90)
+        dyn_lmk_b_coords = torch.index_select(dynamic_lmk_b_coords, 0, yaw_angle + 90)
+
+        return dyn_lmk_faces_idx, dyn_lmk_b_coords
+
+    def seletec_3d68(self, vertices):
+        landmarks3d = vertices2landmarks(
+            vertices,
+            self.faces_tensor,
+            self.full_lmk_faces_idx.repeat(vertices.shape[0], 1),
+            self.full_lmk_bary_coords.repeat(vertices.shape[0], 1, 1),
+        )
+        return landmarks3d
+
+    def get_euler_angles(self, pose_params, dtype: torch.dtype = torch.float32):
+        """
+            Input:
+                pose_params: (bs, 6)
+            return:
+                angles: (bs, 3), [yaw, pitch, roll]
+        """
+        batch_size = pose_params.shape[0]
+        # get the final rotation matrix
+        # (bs, 3, 3)
+        rot_mats = batch_rodrigues(pose_params[:, :3])
+        # get the angles
+        angles = torch.zeros((batch_size, 3), dtype=dtype)
+        for idx in range(batch_size):
+            yaw, pitch, roll = matrix2angle(rot_mats[idx])
+            angles[idx, 0] = yaw
+            angles[idx, 1] = pitch
+            angles[idx, 2] = roll
+        
+        return angles
+        
+    def forward(self, shape_params, expression_params, pose_params):
+        """
+            Input:
+                shape_params: (N, n_shape)
+                expression_params: (N, n_exp)
+                pose_params: (N, n_pose), n_pose=6, rotation vector (axis-angle) + [tx, ty, tx]
+            return:d
+                vertices: (N, V, 3)
+                landmarks2d: (N, n_landmarks, 2), boundary placed on contour
+                landmarks3d: (N, n_landmarks, 3)
+        """
+        batch_size = shape_params.shape[0]
+
+        # get face vertices
+        vertices = \
+            self.mean_shape.expand(batch_size, -1) + \
+            torch.matmul(shape_params, self.u_id) + \
+            torch.matmul(expression_params, self.u_exp)
+        vertices = vertices.reshape(batch_size, -1, 3)
+
+        # rotate the mesh globally using extrinsic camera matrix
+        R = batch_rodrigues(pose_params[:, :3])
+        vertices = torch.bmm(vertices, R.transpose(1, 2)) + pose_params[:, None, 3:]
+        
+        # (N, 51)
+        lmk_faces_idx = self.lmk_faces_idx.unsqueeze(dim=0).expand(batch_size, -1)
+        # (N, 51, 3)
+        lmk_bary_coords = self.lmk_bary_coords.unsqueeze(dim=0).expand(batch_size, -1, -1)
+        # get indices for the boundary points
+        dyn_lmk_faces_idx, dyn_lmk_bary_coords = self._find_dynamic_lmk_idx_and_bcoords(
+            pose_params[:, :3],
+            self.dynamic_lmk_faces_idx,
+            self.dynamic_lmk_bary_coords,
+            dtype=self.dtype,
+        )
+        # (N, 68)
+        lmk_faces_idx = torch.cat([dyn_lmk_faces_idx, lmk_faces_idx], 1)
+        # (N, 68, 3)
+        lmk_bary_coords = torch.cat([dyn_lmk_bary_coords, lmk_bary_coords], 1)
+        
+        # get 2d landmarks
+        landmarks2d = vertices2landmarks(
+            vertices,
+            self.faces_tensor,
+            lmk_faces_idx,
+            lmk_bary_coords,
+        )
+        
+        # get 3d landmarks
+        landmarks3d = vertices2landmarks(
+            vertices,
+            self.faces_tensor,
+            self.full_lmk_faces_idx.repeat(batch_size, 1),
+            self.full_lmk_bary_coords.repeat(batch_size, 1, 1),
+        )
+
+        # get face pose
+        face_poses = self.get_euler_angles(pose_params)        
+
+        return vertices, landmarks2d, landmarks3d, face_poses
+
+
 class ARMultilinear(nn.Module):
     def __init__(self, tdmm_dir):
         super(ARMultilinear, self).__init__()
