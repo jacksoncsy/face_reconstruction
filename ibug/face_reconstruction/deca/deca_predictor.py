@@ -101,7 +101,7 @@ class DecaCoarsePredictor(object):
             )
         elif name == "arl_res50_coarse":
             return ModelConfig(
-                weight_path=os.path.join(os.path.dirname(__file__), "weights/arl_res50_coarse_test.pth"),
+                weight_path=os.path.join(os.path.dirname(__file__), "weights/arl_res50_coarse.pth"),
                 settings=DecaSettings(
                     tdmm_type="arl",
                     backbone="resnet50",
@@ -113,7 +113,7 @@ class DecaCoarsePredictor(object):
             )
         elif name == "arl_mbv2_coarse":
             return ModelConfig(
-                weight_path=os.path.join(os.path.dirname(__file__), "weights/arl_mbv2_coarse.pth"),
+                weight_path=os.path.join(os.path.dirname(__file__), "weights/??.pth"),
                 settings=DecaSettings(
                     tdmm_type="arl",
                     backbone="mobilenetv2",
