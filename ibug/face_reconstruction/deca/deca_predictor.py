@@ -73,13 +73,13 @@ class DecaCoarsePredictor(object):
         self.tdmm.to(self.device)
 
     @staticmethod
-    def create_model_config(name: str="ar_res50_coarse") -> ModelConfig:
+    def create_model_config(name: str="arml_res50_coarse") -> ModelConfig:
         name = name.lower()
-        if name == "ar_res50_coarse":
+        if name == "arml_res50_coarse":
             return ModelConfig(
-                weight_path=os.path.join(os.path.dirname(__file__), "weights/ar_res50_coarse.pth"),
+                weight_path=os.path.join(os.path.dirname(__file__), "weights/arml_res50_coarse.pth"),
                 settings=DecaSettings(
-                    tdmm_type="ar",
+                    tdmm_type="arml",
                     backbone="resnet50",
                     input_size=224,
                     coarse_parameters=OrderedDict(
@@ -87,11 +87,11 @@ class DecaCoarsePredictor(object):
                     ),
                 ),
             )
-        elif name == "ar_mbv2_coarse":
+        elif name == "arml_mbv2_coarse":
             return ModelConfig(
-                weight_path=os.path.join(os.path.dirname(__file__), "weights/ar_mbv2_coarse.pth"),
+                weight_path=os.path.join(os.path.dirname(__file__), "weights/arml_mbv2_coarse.pth"),
                 settings=DecaSettings(
-                    tdmm_type="ar",
+                    tdmm_type="arml",
                     backbone="mobilenetv2",
                     input_size=224,
                     coarse_parameters=OrderedDict(
@@ -157,7 +157,7 @@ class DecaCoarsePredictor(object):
     @staticmethod
     def load_tdmm(config: DecaSettings) -> Union[ARMultilinear, ARLinear, FLAME]:
         tdmm_type = config.tdmm_type.lower()
-        if tdmm_type == "ar":
+        if tdmm_type == "arml":
             tdmm = ARMultilinear(os.path.join(os.path.dirname(__file__), "assets/ar_multilinear"))
         elif tdmm_type == "arl":
             tdmm = ARLinear(os.path.join(os.path.dirname(__file__), "assets/ar_linear"))

@@ -44,7 +44,7 @@ def main() -> None:
     # arguments for face reconstruction
     parser.add_argument(
         "--reconstruction-weights", "-rw", default="flame_res50_coarse",
-        help="Pretrained weights (ar_res50_coarse, ar_mbv2_coarse, \
+        help="Pretrained weights (arml_res50_coarse, arml_mbv2_coarse, \
             arl_res50_coarse, arl_mbv2_coarse, flame_res50_coarse or flame_mbv2_coarse)"
     )
     parser.add_argument(
