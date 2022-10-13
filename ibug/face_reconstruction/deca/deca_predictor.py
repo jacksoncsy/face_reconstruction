@@ -60,6 +60,8 @@ class DecaCoarsePredictor(object):
         # load 3DMM and other related assets
         self.tdmm = DecaCoarsePredictor.load_tdmm(self.model_config.settings)
         self.tdmm.eval()
+        # record the type of 3DMMs
+        self.tdmm_type = self.model_config.settings.tdmm_type
 
         if self.predictor_config.use_jit:
             input_size = self.model_config.settings.input_size
@@ -212,6 +214,10 @@ class DecaCoarsePredictor(object):
 
             # Parse those parameters according to the config
             params_dict = self.parse_parameters(params)
+
+            # Clamp the expression parameters for certain 3DMMs
+            if self.tdmm_type in ["arl", "arml"]:
+                params_dict["exp"] = torch.clamp(params_dict["exp"], min=0.0, max=1.0)
 
             # Reconstruct using shape, expression and pose parameters
             # Results are in world coordinates, we will bring them to the original image space3
