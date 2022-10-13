@@ -179,7 +179,8 @@ class DecaCoarsePredictor(object):
         self, image: np.ndarray, landmarks: np.ndarray, rgb: bool=True,
     ) -> List[Dict]:
         if landmarks.size > 0:
-            if rgb:
+            # DECA expects RGB image as input
+            if not rgb:
                 image = image[..., ::-1]
             # convert to (bs, n_lmk, 2)
             if landmarks.ndim == 2:

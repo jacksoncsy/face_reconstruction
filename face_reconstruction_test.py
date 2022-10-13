@@ -149,7 +149,7 @@ def main() -> None:
 
                 # Face reconstruction
                 start_time = time.time()
-                reconstruction_results = face_reconstructor(frame, landmarks, rgb=True)
+                reconstruction_results = face_reconstructor(frame, landmarks, rgb=False)
                 face_reconstruction_time = time.time() - start_time
 
                 # perform sanity check to the results
