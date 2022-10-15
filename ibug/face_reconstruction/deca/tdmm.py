@@ -42,32 +42,32 @@ class ARLinear(nn.Module):
 
     def load_landmark_embeddings(self, filepath):
         lmk_embeddings = pickle.load(open(filepath, "rb"))
-        # (51,)
+        # (n_interal_pts,), n_interal_pts == 51 for 68 landmarks, 83 for 100 landmarks
         self.register_buffer(
             "lmk_faces_idx", 
             torch.from_numpy(lmk_embeddings["static_lmk_faces_idx"]).long(),
         )
-        # (51, 3)
+        # (n_interal_pts, 3), n_interal_pts == 51 for 68 landmarks, 83 for 100 landmarks
         self.register_buffer(
             "lmk_bary_coords",
             torch.from_numpy(lmk_embeddings["static_lmk_bary_coords"]).to(self.dtype),
         )
-        # (181, 17)
+        # (181, 17), jaw lines
         self.register_buffer(
             "dynamic_lmk_faces_idx",
             torch.from_numpy(lmk_embeddings["dynamic_lmk_faces_idx"]).long(),
         )
-        # (181, 17, 3)
+        # (181, 17, 3), jaw lines
         self.register_buffer(
             "dynamic_lmk_bary_coords",
             torch.from_numpy(lmk_embeddings["dynamic_lmk_bary_coords"]).to(self.dtype),
         )
-        # (1, 68)
+        # (1, n_pts), 68 landmarks or 100 landmarks
         self.register_buffer(
             "full_lmk_faces_idx",
             torch.from_numpy(lmk_embeddings["full_lmk_faces_idx"]).long(),
         )
-        # (1, 68, 3)
+        # (1, n_pts, 3), 68 landmarks or 100 landmarks
         self.register_buffer(
             "full_lmk_bary_coords",
             torch.from_numpy(lmk_embeddings["full_lmk_bary_coords"]).to(self.dtype),
@@ -118,7 +118,7 @@ class ARLinear(nn.Module):
 
         return dyn_lmk_faces_idx, dyn_lmk_b_coords
 
-    def seletec_3d68(self, vertices):
+    def select_3d_landmarks(self, vertices):
         landmarks3d = vertices2landmarks(
             vertices,
             self.faces_tensor,
@@ -172,9 +172,9 @@ class ARLinear(nn.Module):
         R = batch_rodrigues(pose_params[:, :3])
         vertices = torch.bmm(vertices, R.transpose(1, 2)) + pose_params[:, None, 3:]
         
-        # (N, 51)
+        # (N, n_interal_pts), n_interal_pts == 51 for 68 landmarks, 83 for 100 landmarks
         lmk_faces_idx = self.lmk_faces_idx.unsqueeze(dim=0).expand(batch_size, -1)
-        # (N, 51, 3)
+        # (N, n_interal_pts, 3), n_interal_pts == 51 for 68 landmarks, 83 for 100 landmarks
         lmk_bary_coords = self.lmk_bary_coords.unsqueeze(dim=0).expand(batch_size, -1, -1)
         # get indices for the boundary points
         dyn_lmk_faces_idx, dyn_lmk_bary_coords = self._find_dynamic_lmk_idx_and_bcoords(
@@ -183,9 +183,9 @@ class ARLinear(nn.Module):
             self.dynamic_lmk_bary_coords,
             dtype=self.dtype,
         )
-        # (N, 68)
+        # (N, n_pts), 68 landmarks or 100 landmarks
         lmk_faces_idx = torch.cat([dyn_lmk_faces_idx, lmk_faces_idx], 1)
-        # (N, 68, 3)
+        # (N, n_pts, 3), 68 landmarks or 100 landmarks
         lmk_bary_coords = torch.cat([dyn_lmk_bary_coords, lmk_bary_coords], 1)
         
         # get 2d landmarks
@@ -325,7 +325,7 @@ class ARMultilinear(nn.Module):
 
         return dyn_lmk_faces_idx, dyn_lmk_b_coords
 
-    def seletec_3d68(self, vertices):
+    def select_3d_landmarks(self, vertices):
         landmarks3d = vertices2landmarks(
             vertices,
             self.faces_tensor,
@@ -573,7 +573,7 @@ class FLAME(nn.Module):
 
         return dyn_lmk_faces_idx, dyn_lmk_b_coords
 
-    def seletec_3d68(self, vertices):
+    def select_3d_landmarks(self, vertices):
         landmarks3d = vertices2landmarks(
             vertices,
             self.faces_tensor,

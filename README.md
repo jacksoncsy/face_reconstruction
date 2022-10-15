@@ -39,7 +39,7 @@ pip install -e .
 
 ## How to Use
 
-### Call 3D face reconstruction with 68 landmarks in Python file
+### Call 3D face reconstruction given 68 landmarks as input in Python file
 ```python
 from ibug.face_reconstruction import DecaCoarsePredictor
 
