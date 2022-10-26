@@ -62,6 +62,8 @@ class DecaCoarsePredictor(object):
         self.tdmm.eval()
         # record the type of 3DMMs
         self.tdmm_type = self.model_config.settings.tdmm_type
+        # record the trilist
+        self.trilist = self.tdmm.get_trilist().copy()
 
         if self.predictor_config.use_jit:
             input_size = self.model_config.settings.input_size
@@ -278,4 +280,4 @@ class DecaCoarsePredictor(object):
         return params_dict
 
     def get_trilist(self) -> np.array:
-        return self.tdmm.trilist
+        return self.trilist

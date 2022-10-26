@@ -40,6 +40,10 @@ class ARLinear(nn.Module):
         # load static and dynamic landmark embeddings
         self.load_landmark_embeddings(osp.join(tdmm_dir, "landmark_embedding.pkl"))
 
+    def get_trilist(self):
+        # Triangulation
+        return to_np(self.faces_tensor, dtype=np.int64)
+
     def load_landmark_embeddings(self, filepath):
         lmk_embeddings = pickle.load(open(filepath, "rb"))
         # (n_interal_pts,), n_interal_pts == 51 for 68 landmarks, 83 for 100 landmarks
@@ -234,11 +238,13 @@ class ARMultilinear(nn.Module):
         self.register_buffer('v_template', verts)
         # triangles
         self.register_buffer('faces_tensor', faces)
-        # Triangulation
-        self.trilist = to_np(faces, dtype=np.int64)
 
         # load static and dynamic landmark embeddings
         self.load_landmark_embeddings(osp.join(tdmm_dir, "landmark_embedding.pkl"))
+
+    def get_trilist(self):
+        # Triangulation
+        return to_np(self.faces_tensor, dtype=np.int64)
 
     def load_landmark_embeddings(self, filepath):
         lmk_embeddings = pickle.load(open(filepath, "rb"))
@@ -445,8 +451,6 @@ class FLAME(nn.Module):
         self.register_buffer(
             'faces_tensor', to_tensor(to_np(flame_model.f, dtype=np.int64), dtype=torch.long),
         )
-        # Triangulation
-        self.trilist = to_np(flame_model.f, dtype=np.int64)
         # The vertices of the template model
         self.register_buffer(
             'v_template', to_tensor(to_np(flame_model.v_template), dtype=self.dtype),
@@ -520,6 +524,10 @@ class FLAME(nn.Module):
             neck_kin_chain.append(curr_idx)
             curr_idx = self.parents[curr_idx]
         self.register_buffer('neck_kin_chain', torch.stack(neck_kin_chain))
+
+    def get_trilist(self):
+        # Triangulation
+        return to_np(self.faces_tensor, dtype=np.int64)
         
     def _find_dynamic_lmk_idx_and_bcoords(
         self, pose, dynamic_lmk_faces_idx, dynamic_lmk_b_coords, neck_kin_chain, dtype: torch.dtype = torch.float32,
