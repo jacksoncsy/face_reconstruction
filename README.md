@@ -25,11 +25,10 @@ pip install -e .
 ```
 
 2. Download the 3DMMs assets \
-    (a) Download [FLAME](https://flame.is.tue.mpg.de/download.php), choose **FLAME 2020** and unzip it, move **generic_model.pkl** into ./ibug/face_reconstruction/deca/assets/flame  \
+    (a) Download [FLAME](https://flame.is.tue.mpg.de/download.php), choose **FLAME 2020** and unzip it, move **generic_model.pkl** into ./ibug/face_reconstruction/deca/assets/flame \
     (b) Download [FLAME landmark asset](https://github.com/YadiraF/DECA/blob/master/data/landmark_embedding.npy), and move it into ./ibug/face_reconstruction/deca/assets/flame \
-    (c) (Optional) Download AR multilinear models and assets, and move them into ./ibug/face_reconstruction/deca/assets/ar_multilinear  
-    (d) (Optional) Download AR linear models and assets, and move them into ./ibug/face_reconstruction/deca/assets/ar_linear
-    (e) (Optional) Download v1 AR linear models and assets, and move them into ./ibug/face_reconstruction/deca/assets/ar_linear_v1
+    (c) (Optional) Download AR multilinear models and assets, and move them into ./ibug/face_reconstruction/deca/assets/ar_multilinear \
+    (d) (Optional) Download AR linear models and assets, and move them into the corresponding folders (e.g., for ARLv1, move into ./ibug/face_reconstruction/deca/assets/ar_linear_v1).
 
 3. Download the pretrained models \
     (a) Download the [FLAME-based pretrained models](https://drive.google.com/drive/folders/1Gke3AwvtHvukz4XxGC4PwwgpFALR_xUL?usp=sharing), and put them into ./ibug/face_reconstruction/deca/weights  \
