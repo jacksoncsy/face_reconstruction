@@ -5,6 +5,9 @@ ibug/face_reconstruction/deca/assets/ar_multilinear/*
 ibug/face_reconstruction/deca/assets/ar_linear/*
 !ibug/face_reconstruction/deca/assets/ar_linear/.gitkeep
 
+ibug/face_reconstruction/deca/assets/ar_linear_v1/*
+!ibug/face_reconstruction/deca/assets/ar_linear_v1/.gitkeep
+
 ibug/face_reconstruction/deca/assets/flame/*
 !ibug/face_reconstruction/deca/assets/flame/.gitkeep
 

@@ -18,18 +18,24 @@ from .tdmm_utils import (
 
 
 class ARLinear(nn.Module):
-    def __init__(self, tdmm_dir):
+    def __init__(
+        self,
+        tdmm_dir,
+        tdmm_name="ar_linear_tdmm.pkl",
+        template_name="base_det.obj",
+        lmk_embedding_name="landmark_embedding.pkl",
+    ):
         super(ARLinear, self).__init__()
 
         self.dtype = torch.float32
         # load multilinear model bases
-        mean_shape, u_id, u_exp = self.load_basis(osp.join(tdmm_dir, "ar_linear_tdmm.pkl"))
+        mean_shape, u_id, u_exp = self.load_basis(osp.join(tdmm_dir, tdmm_name))
         self.register_buffer("mean_shape", torch.tensor(mean_shape, dtype=self.dtype))
         self.register_buffer("u_id", torch.tensor(u_id, dtype=self.dtype))
         self.register_buffer("u_exp", torch.tensor(u_exp, dtype=self.dtype))
 
         # load template
-        verts, _, faces, _ = load_obj(osp.join(tdmm_dir, "base_det.obj"))
+        verts, _, faces, _ = load_obj(osp.join(tdmm_dir, template_name))
         # vertices
         self.register_buffer("v_template", verts)
         # triangles
@@ -38,7 +44,7 @@ class ARLinear(nn.Module):
         self.trilist = to_np(faces, dtype=np.int64)
 
         # load static and dynamic landmark embeddings
-        self.load_landmark_embeddings(osp.join(tdmm_dir, "landmark_embedding.pkl"))
+        self.load_landmark_embeddings(osp.join(tdmm_dir, lmk_embedding_name))
 
     def get_trilist(self):
         # Triangulation

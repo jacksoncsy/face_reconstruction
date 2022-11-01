@@ -43,9 +43,13 @@ def main() -> None:
     )
     # arguments for face reconstruction
     parser.add_argument(
-        "--reconstruction-weights", "-rw", default="flame_res50_coarse",
-        help="Pretrained weights (arml_res50_coarse, arml_mbv2_coarse, \
-            arl_res50_coarse, arl_mbv2_coarse, flame_res50_coarse or flame_mbv2_coarse)"
+        "--reconstruction-weights", "-rw", default="arlv1_res50_coarse",
+        help="Pretrained weights ( \
+            flame_res50_coarse or flame_mbv2_coarse \
+            arml_res50_coarse, arml_mbv2_coarse, \
+            arl_res50_coarse, arl_mbv2_coarse, \
+            arlv1_res50_coarse, arlv1_mbv2_coarse, \
+        )"
     )
     parser.add_argument(
         "--reconstruction-device", "-rd", default="cuda:0",

@@ -1,4 +1,5 @@
 import os
+import os.path as osp
 import torch
 import numpy as np
 
@@ -77,11 +78,11 @@ class DecaCoarsePredictor(object):
         self.tdmm.to(self.device)
 
     @staticmethod
-    def create_model_config(name: str="arml_res50_coarse") -> ModelConfig:
+    def create_model_config(name: str="arlv1_res50_coarse") -> ModelConfig:
         name = name.lower()
         if name == "arml_res50_coarse":
             return ModelConfig(
-                weight_path=os.path.join(os.path.dirname(__file__), "weights/arml_res50_coarse.pth"),
+                weight_path=osp.join(osp.dirname(__file__), "weights/arml_res50_coarse.pth"),
                 settings=DecaSettings(
                     tdmm_type="arml",
                     backbone="resnet50",
@@ -93,7 +94,7 @@ class DecaCoarsePredictor(object):
             )
         elif name == "arml_mbv2_coarse":
             return ModelConfig(
-                weight_path=os.path.join(os.path.dirname(__file__), "weights/arml_mbv2_coarse.pth"),
+                weight_path=osp.join(osp.dirname(__file__), "weights/arml_mbv2_coarse.pth"),
                 settings=DecaSettings(
                     tdmm_type="arml",
                     backbone="mobilenetv2",
@@ -105,7 +106,7 @@ class DecaCoarsePredictor(object):
             )
         elif name == "arl_res50_coarse":
             return ModelConfig(
-                weight_path=os.path.join(os.path.dirname(__file__), "weights/arl_res50_coarse.pth"),
+                weight_path=osp.join(osp.dirname(__file__), "weights/arl_res50_coarse.pth"),
                 settings=DecaSettings(
                     tdmm_type="arl",
                     backbone="resnet50",
@@ -117,7 +118,7 @@ class DecaCoarsePredictor(object):
             )
         elif name == "arl_mbv2_coarse":
             return ModelConfig(
-                weight_path=os.path.join(os.path.dirname(__file__), "weights/??.pth"),
+                weight_path=osp.join(osp.dirname(__file__), "weights/??.pth"),
                 settings=DecaSettings(
                     tdmm_type="arl",
                     backbone="mobilenetv2",
@@ -126,10 +127,34 @@ class DecaCoarsePredictor(object):
                         {"shape": 33, "tex": 23, "exp": 52, "pose": 6, "cam": 3, "light": 27}
                     ),
                 ),
-            )            
+            )
+        elif name == "arlv1_res50_coarse":
+            return ModelConfig(
+                weight_path=osp.join(osp.dirname(__file__), "weights/arlv1_res50_coarse_test.pth"),
+                settings=DecaSettings(
+                    tdmm_type="arlv1",
+                    backbone="resnet50",
+                    input_size=224,
+                    coarse_parameters=OrderedDict(
+                        {"shape": 33, "tex": 23, "exp": 52, "pose": 6, "cam": 3, "light": 27}
+                    ),
+                ),
+            )
+        elif name == "arlv1_mbv2_coarse":
+            return ModelConfig(
+                weight_path=osp.join(osp.dirname(__file__), "weights/??.pth"),
+                settings=DecaSettings(
+                    tdmm_type="arlv1",
+                    backbone="mobilenetv2",
+                    input_size=224,
+                    coarse_parameters=OrderedDict(
+                        {"shape": 33, "tex": 23, "exp": 52, "pose": 6, "cam": 3, "light": 27}
+                    ),
+                ),
+            )             
         elif name == "flame_res50_coarse":
             return ModelConfig(
-                weight_path=os.path.join(os.path.dirname(__file__), "weights/flame_res50_coarse.pth"),
+                weight_path=osp.join(osp.dirname(__file__), "weights/flame_res50_coarse.pth"),
                 settings=DecaSettings(
                     tdmm_type="flame",
                     backbone="resnet50",
@@ -141,7 +166,7 @@ class DecaCoarsePredictor(object):
             )
         elif name == "flame_mbv2_coarse":
             return ModelConfig(
-                weight_path=os.path.join(os.path.dirname(__file__), "weights/flame_mbv2_coarse.pth"),
+                weight_path=osp.join(osp.dirname(__file__), "weights/flame_mbv2_coarse.pth"),
                 settings=DecaSettings(
                     tdmm_type="flame",
                     backbone="mobilenetv2",
@@ -162,12 +187,17 @@ class DecaCoarsePredictor(object):
     def load_tdmm(config: DecaSettings) -> Union[ARMultilinear, ARLinear, FLAME]:
         tdmm_type = config.tdmm_type.lower()
         if tdmm_type == "arml":
-            tdmm = ARMultilinear(os.path.join(os.path.dirname(__file__), "assets/ar_multilinear"))
+            tdmm = ARMultilinear(osp.join(osp.dirname(__file__), "assets/ar_multilinear"))
         elif tdmm_type == "arl":
-            tdmm = ARLinear(os.path.join(os.path.dirname(__file__), "assets/ar_linear"))
+            tdmm = ARLinear(osp.join(osp.dirname(__file__), "assets/ar_linear"))
+        elif tdmm_type == "arlv1":
+            tdmm = ARLinear(
+                osp.join(osp.dirname(__file__), "assets/ar_linear_v1"),
+                lmk_embedding_name="landmark_embedding_lms100.pkl",
+            )
         elif tdmm_type == "flame":
             tdmm = FLAME(
-                os.path.join(os.path.dirname(__file__), "assets/flame"),
+                osp.join(osp.dirname(__file__), "assets/flame"),
                 n_shape=config.coarse_parameters["shape"],
                 n_exp=config.coarse_parameters["exp"],
             )
@@ -221,6 +251,8 @@ class DecaCoarsePredictor(object):
             # Clamp the expression parameters for certain 3DMMs
             if self.tdmm_type in ["arl", "arml"]:
                 params_dict["exp"] = torch.clamp(params_dict["exp"], min=0.0, max=1.0)
+            elif self.tdmm_type in ["arlv1"]:
+                params_dict["exp"] = torch.sigmoid(params_dict["exp"])
 
             # Reconstruct using shape, expression and pose parameters
             # Results are in world coordinates, we will bring them to the original image space3

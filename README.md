@@ -2,6 +2,7 @@
 This repo has the inference codes for 3D face reconstruction based on [DECA](https://arxiv.org/pdf/2012.04012.pdf) with some pretrained weights. We currently support blendshape model [FLAME](https://flame.is.tue.mpg.de/index.html). 
 
 **\[Updates\]**
+ - `2022.11.01`: Support inference with 100 landmarks, better expression regularisation
  - `2022.10.11`: Support inference with AR linear model
 
 ## Prerequisites
@@ -28,6 +29,7 @@ pip install -e .
     (b) Download [FLAME landmark asset](https://github.com/YadiraF/DECA/blob/master/data/landmark_embedding.npy), and move it into ./ibug/face_reconstruction/deca/assets/flame \
     (c) (Optional) Download AR multilinear models and assets, and move them into ./ibug/face_reconstruction/deca/assets/ar_multilinear  
     (d) (Optional) Download AR linear models and assets, and move them into ./ibug/face_reconstruction/deca/assets/ar_linear
+    (e) (Optional) Download v1 AR linear models and assets, and move them into ./ibug/face_reconstruction/deca/assets/ar_linear_v1
 
 3. Download the pretrained models \
     (a) Download the [FLAME-based pretrained models](https://drive.google.com/drive/folders/1Gke3AwvtHvukz4XxGC4PwwgpFALR_xUL?usp=sharing), and put them into ./ibug/face_reconstruction/deca/weights  \
