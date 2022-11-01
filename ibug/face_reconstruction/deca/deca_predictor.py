@@ -130,7 +130,7 @@ class DecaCoarsePredictor(object):
             )
         elif name == "arlv1_res50_coarse":
             return ModelConfig(
-                weight_path=osp.join(osp.dirname(__file__), "weights/arlv1_res50_coarse_test.pth"),
+                weight_path=osp.join(osp.dirname(__file__), "weights/arlv1_res50_coarse.pth"),
                 settings=DecaSettings(
                     tdmm_type="arlv1",
                     backbone="resnet50",
