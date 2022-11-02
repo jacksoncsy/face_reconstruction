@@ -46,7 +46,7 @@ class ARLinear(nn.Module):
 
     def get_trilist(self):
         # Triangulation
-        return to_np(self.faces_tensor, dtype=np.int64)
+        return self.faces_tensor.cpu().numpy().astype(np.int64)
 
     def load_landmark_embeddings(self, filepath):
         lmk_embeddings = pickle.load(open(filepath, "rb"))
@@ -248,7 +248,7 @@ class ARMultilinear(nn.Module):
 
     def get_trilist(self):
         # Triangulation
-        return to_np(self.faces_tensor, dtype=np.int64)
+        return self.faces_tensor.cpu().numpy().astype(np.int64)
 
     def load_landmark_embeddings(self, filepath):
         lmk_embeddings = pickle.load(open(filepath, "rb"))
@@ -531,7 +531,7 @@ class FLAME(nn.Module):
 
     def get_trilist(self):
         # Triangulation
-        return to_np(self.faces_tensor, dtype=np.int64)
+        return self.faces_tensor.cpu().numpy().astype(np.int64)
         
     def _find_dynamic_lmk_idx_and_bcoords(
         self, pose, dynamic_lmk_faces_idx, dynamic_lmk_b_coords, neck_kin_chain, dtype: torch.dtype = torch.float32,
