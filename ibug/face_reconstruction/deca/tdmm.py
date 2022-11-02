@@ -40,8 +40,6 @@ class ARLinear(nn.Module):
         self.register_buffer("v_template", verts)
         # triangles
         self.register_buffer("faces_tensor", faces)
-        # Triangulation
-        self.trilist = to_np(faces, dtype=np.int64)
 
         # load static and dynamic landmark embeddings
         self.load_landmark_embeddings(osp.join(tdmm_dir, lmk_embedding_name))
