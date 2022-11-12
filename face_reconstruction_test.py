@@ -13,8 +13,8 @@ from ibug.face_detection import RetinaFacePredictor
 from ibug.face_reconstruction import (
     DecaCoarsePredictor,
     DecaDetailPredictor,
-    DecaCoarseModel,
-    DecaDetailModel,
+    DecaCoarseModelName,
+    DecaDetailModelName,
 )
 from ibug.face_reconstruction.deca.deca_utils import check_2d_landmarks, check_light
 
@@ -114,12 +114,12 @@ def main() -> None:
 
         # Create the DECA coarse/detail reconstructor
         rw = args.reconstruction_weights
-        if DecaCoarseModel.has_value(rw):
+        if DecaCoarseModelName.has_value(rw):
             frec_model = DecaCoarsePredictor.create_model_config(rw)
             face_reconstructor = DecaCoarsePredictor(
                 device=args.reconstruction_device, model_config=frec_model,
             )
-        elif DecaDetailModel.has_value(rw):
+        elif DecaDetailModelName.has_value(rw):
             frec_model = DecaDetailPredictor.create_model_config(rw)
             face_reconstructor = DecaDetailPredictor(
                 device=args.reconstruction_device, model_config=frec_model,

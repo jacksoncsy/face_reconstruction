@@ -34,7 +34,7 @@ class PredictorConfig:
     use_jit: bool
 
 
-class DecaModel(Enum):
+class DecaModelName(Enum):
     @classmethod
     def has_value(cls, value: str) -> bool:
         try:
@@ -44,7 +44,7 @@ class DecaModel(Enum):
         return True
 
 @unique
-class DecaCoarseModel(DecaModel):
+class DecaCoarseModelName(DecaModelName):
     FLAME_RES50_COARSE  = "flame_res50_coarse"
     FLAME_MBV2_COARSE   = "flame_mbv2_coarse"
     ARML_RES50_COARSE   = "arml_res50_coarse"
@@ -55,7 +55,7 @@ class DecaCoarseModel(DecaModel):
     ARLV1_MBV2_COARSE   = "arlv1_mbv2_coarse"
 
 @unique
-class DecaDetailModel(DecaModel):
+class DecaDetailModelName(DecaModelName):
     ARLV1_RES50_DETAIL  = "arlv1_res50_detail"
 
 
@@ -107,9 +107,9 @@ class DecaCoarsePredictor(object):
     @staticmethod
     def create_model_config(name: str="arlv1_res50_coarse") -> ModelConfig:
         name = name.lower()
-        assert DecaCoarseModel.has_value(name), f"Unknown model name: {name}"
-        method = DecaCoarseModel(name)
-        if method == DecaCoarseModel.ARML_RES50_COARSE:
+        assert DecaCoarseModelName.has_value(name), f"Unknown model name: {name}"
+        method = DecaCoarseModelName(name)
+        if method == DecaCoarseModelName.ARML_RES50_COARSE:
             return ModelConfig(
                 weight_path=osp.join(osp.dirname(__file__), "weights/arml_res50_coarse.pth"),
                 settings=DecaSettings(
@@ -121,7 +121,7 @@ class DecaCoarsePredictor(object):
                     ),
                 ),
             )
-        elif method == DecaCoarseModel.ARML_MBV2_COARSE:
+        elif method == DecaCoarseModelName.ARML_MBV2_COARSE:
             return ModelConfig(
                 weight_path=osp.join(osp.dirname(__file__), "weights/arml_mbv2_coarse.pth"),
                 settings=DecaSettings(
@@ -133,7 +133,7 @@ class DecaCoarsePredictor(object):
                     ),
                 ),
             )
-        elif method == DecaCoarseModel.ARL_RES50_COARSE:
+        elif method == DecaCoarseModelName.ARL_RES50_COARSE:
             return ModelConfig(
                 weight_path=osp.join(osp.dirname(__file__), "weights/arl_res50_coarse.pth"),
                 settings=DecaSettings(
@@ -145,7 +145,7 @@ class DecaCoarsePredictor(object):
                     ),
                 ),
             )
-        elif method == DecaCoarseModel.ARL_MBV2_COARSE:
+        elif method == DecaCoarseModelName.ARL_MBV2_COARSE:
             return ModelConfig(
                 weight_path=osp.join(osp.dirname(__file__), "weights/??.pth"),
                 settings=DecaSettings(
@@ -157,7 +157,7 @@ class DecaCoarsePredictor(object):
                     ),
                 ),
             )
-        elif method == DecaCoarseModel.ARLV1_RES50_COARSE:
+        elif method == DecaCoarseModelName.ARLV1_RES50_COARSE:
             return ModelConfig(
                 weight_path=osp.join(osp.dirname(__file__), "weights/arlv1_res50_coarse.pth"),
                 settings=DecaSettings(
@@ -169,7 +169,7 @@ class DecaCoarsePredictor(object):
                     ),
                 ),
             )
-        elif method == DecaCoarseModel.ARLV1_MBV2_COARSE:
+        elif method == DecaCoarseModelName.ARLV1_MBV2_COARSE:
             return ModelConfig(
                 weight_path=osp.join(osp.dirname(__file__), "weights/??.pth"),
                 settings=DecaSettings(
@@ -181,7 +181,7 @@ class DecaCoarsePredictor(object):
                     ),
                 ),
             )             
-        elif method == DecaCoarseModel.FLAME_RES50_COARSE:
+        elif method == DecaCoarseModelName.FLAME_RES50_COARSE:
             return ModelConfig(
                 weight_path=osp.join(osp.dirname(__file__), "weights/flame_res50_coarse.pth"),
                 settings=DecaSettings(
@@ -193,7 +193,7 @@ class DecaCoarsePredictor(object):
                     ),
                 ),
             )
-        elif method == DecaCoarseModel.FLAME_MBV2_COARSE:
+        elif method == DecaCoarseModelName.FLAME_MBV2_COARSE:
             return ModelConfig(
                 weight_path=osp.join(osp.dirname(__file__), "weights/flame_mbv2_coarse.pth"),
                 settings=DecaSettings(
@@ -408,9 +408,9 @@ class DecaDetailPredictor(DecaCoarsePredictor):
     @staticmethod
     def create_model_config(name: str="arlv1_res50_detail") -> ModelConfig:
         name = name.lower()
-        assert DecaDetailModel.has_value(name), f"Unknown model name: {name}"
-        method = DecaDetailModel(name)        
-        if method == DecaDetailModel.ARLV1_RES50_DETAIL:
+        assert DecaDetailModelName.has_value(name), f"Unknown model name: {name}"
+        method = DecaDetailModelName(name)        
+        if method == DecaDetailModelName.ARLV1_RES50_DETAIL:
             return ModelConfig(
                 weight_path=osp.join(osp.dirname(__file__), "weights/arlv1_res50_detail.pth"),
                 settings=DecaSettings(

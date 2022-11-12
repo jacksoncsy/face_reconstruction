@@ -1,8 +1,8 @@
 from .deca import (
     DecaCoarsePredictor,
     DecaDetailPredictor,
-    DecaCoarseModel,
-    DecaDetailModel,
+    DecaCoarseModelName,
+    DecaDetailModelName,
 )
 
 
