@@ -1,7 +1,8 @@
 import math
+import torch
 import torch.nn as nn
 
-from typing import Callable, Optional, List, OrderedDict
+from typing import Callable, Dict, List, Optional, OrderedDict
 from torch import Tensor
 from dataclasses import dataclass
 
@@ -279,12 +280,54 @@ class Bottleneck(nn.Module):
         return out
 
 
+class Generator(nn.Module):
+    def __init__(self, latent_dim, out_scale, sample_mode="bilinear"):
+        super(Generator, self).__init__()
+        self.out_scale = out_scale
+        self.init_size = 32 // 4  # Initial size before upsampling
+        self.l1 = nn.Sequential(nn.Linear(latent_dim, 128 * self.init_size ** 2))
+        self.conv_blocks = nn.Sequential(
+            nn.BatchNorm2d(128),
+            nn.Upsample(scale_factor=2, mode=sample_mode), #16
+            nn.Conv2d(128, 128, 3, stride=1, padding=1),
+            nn.BatchNorm2d(128, 0.8),
+            nn.LeakyReLU(0.2, inplace=True),
+            nn.Upsample(scale_factor=2, mode=sample_mode), #32
+            nn.Conv2d(128, 64, 3, stride=1, padding=1),
+            nn.BatchNorm2d(64, 0.8),
+            nn.LeakyReLU(0.2, inplace=True),
+            nn.Upsample(scale_factor=2, mode=sample_mode), #64
+            nn.Conv2d(64, 64, 3, stride=1, padding=1),
+            nn.BatchNorm2d(64, 0.8),
+            nn.LeakyReLU(0.2, inplace=True),
+            nn.Upsample(scale_factor=2, mode=sample_mode), #128
+            nn.Conv2d(64, 32, 3, stride=1, padding=1),
+            nn.BatchNorm2d(32, 0.8),
+            nn.LeakyReLU(0.2, inplace=True),
+            nn.Upsample(scale_factor=2, mode=sample_mode), #256
+            nn.Conv2d(32, 16, 3, stride=1, padding=1),
+            nn.BatchNorm2d(16, 0.8),
+            nn.LeakyReLU(0.2, inplace=True),
+            nn.Conv2d(16, 1, 3, stride=1, padding=1),
+            nn.Tanh(),
+        )
+
+    def forward(self, inputs):
+        out = self.l1(inputs)
+        out = out.view(out.shape[0], 128, self.init_size, self.init_size)
+        img = self.conv_blocks(out)
+        return img*self.out_scale        
+
+
 @dataclass
 class DecaSettings:
     tdmm_type: str
     backbone: str
     input_size: int
     coarse_parameters: OrderedDict
+    # parameters for detail model are optional if configuring coarse model
+    detail_scale: float = None
+    detail_parameters: OrderedDict = None
 
 
 class DecaCoarse(nn.Module):
@@ -314,3 +357,46 @@ class DecaCoarse(nn.Module):
         features = self.coarse_encoder(inputs)
         parameters = self.coarse_layers(features)
         return parameters 
+
+
+class DecaDetail(nn.Module):
+    def __init__(self, config: DecaSettings):
+        super(DecaDetail, self).__init__()
+        self.detail_parameters = config.detail_parameters
+        self.encoder_output_size = self.detail_parameters["detail"]
+        self.decoder_input_size = sum(self.detail_parameters.values())
+        self.detail_scale = config.detail_scale
+        if config.backbone == "resnet50":
+            feature_size = 2048
+            self.detail_encoder = ResNet(Bottleneck, [3, 4, 6, 3])
+            self.detail_layers = nn.Sequential(
+                nn.Linear(feature_size, 1024),
+                nn.ReLU(),
+                nn.Linear(1024, self.encoder_output_size),
+            )
+        elif config.backbone == "mobilenetv2":
+            feature_size = 1280
+            self.detail_encoder = MobileNetV2()
+            self.detail_layers = nn.Sequential(
+                nn.Linear(feature_size, 640),
+                nn.ReLU(),
+                nn.Linear(640, self.encoder_output_size),
+            )
+        else:
+            raise NotImplementedError(f"Unknown backbone: {config.backbone}")
+        
+        self.detail_decoder = Generator(self.decoder_input_size, self.detail_scale)
+
+    def forward(self, inputs: torch.Tensor):
+        # encode the image into parameters
+        features = self.detail_encoder(inputs)
+        parameters = self.detail_layers(features)
+        return parameters
+
+    @torch.jit.export
+    def decode(self, params_dict: Dict[str, torch.Tensor]):
+        # decode into detail displacement map
+        uv_z = self.detail_decoder(
+            torch.cat([params_dict[key] for key in self.detail_parameters], dim=1)
+        )
+        return uv_z

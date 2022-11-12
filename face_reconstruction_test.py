@@ -10,7 +10,12 @@ from argparse import ArgumentParser
 from ibug.face_alignment import FANPredictor
 from ibug.face_alignment.utils import plot_landmarks
 from ibug.face_detection import RetinaFacePredictor
-from ibug.face_reconstruction import DecaCoarsePredictor
+from ibug.face_reconstruction import (
+    DecaCoarsePredictor,
+    DecaDetailPredictor,
+    DecaCoarseMethod,
+    DecaDetailMethod,
+)
 from ibug.face_reconstruction.deca.deca_utils import check_2d_landmarks, check_light
 
 
@@ -44,12 +49,7 @@ def main() -> None:
     # arguments for face reconstruction
     parser.add_argument(
         "--reconstruction-weights", "-rw", default="arlv1_res50_coarse",
-        help="Pretrained weights ( \
-            flame_res50_coarse or flame_mbv2_coarse \
-            arml_res50_coarse, arml_mbv2_coarse, \
-            arl_res50_coarse, arl_mbv2_coarse, \
-            arlv1_res50_coarse, arlv1_mbv2_coarse, \
-        )"
+        help="Pretrained weights for BC-DECA model"
     )
     parser.add_argument(
         "--reconstruction-device", "-rd", default="cuda:0",
@@ -57,23 +57,27 @@ def main() -> None:
     )
     parser.add_argument(
         "--disable-sanity-check", "-dsc", action="store_true", default=False,
-        help="Enable sanity check to the reconstruction results",
+        help="Disable sanity check to the reconstruction results (default=False)",
     )       
     parser.add_argument(
         "--show-reconstruction-bbox", "-srb", action="store_true", default=False,
-        help="Do not visualise bbox for face reconstruction",
+        help="Visualise bbox for face reconstruction (default=False)",
     )
     parser.add_argument(
         "--show-reconstruction-landmarks2d", "-sr2d", action="store_true", default=False,
-        help="Do not visualise 2D-style landmarks from face reconstruction",
-    ) 
+        help="Visualise 2D-style landmarks from face reconstruction (default=False)",
+    )
+    parser.add_argument(
+        "--show-reconstruction-rendering", "-srr", action="store_true", default=False,
+        help="Visualise 2D-style landmarks from face reconstruction (default=False)",
+    )
     parser.add_argument(
         "--hide-reconstruction-pose", "-hrp", action="store_true", default=False,
-        help="Do not visualise estimated pose from face reconstruction",
+        help="Do not visualise estimated pose from face reconstruction (default=False)",
     )
     parser.add_argument(
         "--hide-reconstruction-landmarks3d", "-hr3d", action="store_true", default=False,
-        help="Do not visualise 3D landmarks from face reconstruction",
+        help="Do not visualise 3D landmarks from face reconstruction (default=False)",
     )
     # arguments for face detection
     parser.add_argument(
@@ -108,11 +112,20 @@ def main() -> None:
         fa_model = FANPredictor.get_model("2dfan2_alt")
         landmark_detector = FANPredictor(device=args.alignment_device, model=fa_model)
 
-        # Create the DECA coarse reconstructor 
-        frec_model = DecaCoarsePredictor.create_model_config(args.reconstruction_weights)
-        face_reconstructor = DecaCoarsePredictor(
-            device=args.reconstruction_device, model_config=frec_model,
-        )
+        # Create the DECA coarse/detail reconstructor
+        rw = args.reconstruction_weights
+        if DecaCoarseMethod.has_value(rw):
+            frec_model = DecaCoarsePredictor.create_model_config(rw)
+            face_reconstructor = DecaCoarsePredictor(
+                device=args.reconstruction_device, model_config=frec_model,
+            )
+        elif DecaDetailMethod.has_value(rw):
+            frec_model = DecaDetailPredictor.create_model_config(rw)
+            face_reconstructor = DecaDetailPredictor(
+                device=args.reconstruction_device, model_config=frec_model,
+            )
+        else:
+            raise NotImplementedError(f"Undefined weight option: {rw}!")
 
         # Open the input video
         using_webcam = not os.path.exists(args.input)

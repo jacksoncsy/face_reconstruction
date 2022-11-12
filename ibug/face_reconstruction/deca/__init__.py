@@ -1,1 +1,6 @@
-from .deca_predictor import DecaCoarsePredictor
+from .deca_predictor import (
+    DecaCoarsePredictor,
+    DecaDetailPredictor,
+    DecaCoarseMethod,
+    DecaDetailMethod,
+)

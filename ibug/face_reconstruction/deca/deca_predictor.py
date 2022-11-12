@@ -5,9 +5,10 @@ import numpy as np
 
 from collections import OrderedDict
 from dataclasses import dataclass
+from enum import Enum, unique
 from typing import Union, Optional, Dict, List
 
-from .deca import DecaCoarse, DecaSettings
+from .deca import DecaCoarse, DecaDetail, DecaSettings
 from .deca_utils import (
     batch_orth_proj,
     bbox2point,
@@ -16,10 +17,10 @@ from .deca_utils import (
     transform_image_cv2,
     transform_to_image_space,
 )
-from .tdmm import FLAME, ARMultilinear, ARLinear
+from .tdmm import FLAME, ARMultilinear, ARLinear, DetailSynthesiser
 
 
-__all__ = ["DecaCoarsePredictor"]
+__all__ = ["DecaCoarsePredictor", "DecaDetailPredictor"]
 
 
 @dataclass
@@ -31,6 +32,31 @@ class ModelConfig:
 @dataclass
 class PredictorConfig:
     use_jit: bool
+
+
+class DecaMethod(Enum):
+    @classmethod
+    def has_value(cls, value: str) -> bool:
+        try:
+            cls(value)
+        except ValueError:
+            return False
+        return True
+
+@unique
+class DecaCoarseMethod(DecaMethod):
+    FLAME_RES50_COARSE  = "flame_res50_coarse"
+    FLAME_MBV2_COARSE   = "flame_mbv2_coarse"
+    ARML_RES50_COARSE   = "arml_res50_coarse"
+    ARML_MBV2_COARSE    = "arml_mbv2_coarse"
+    ARL_RES50_COARSE    = "arl_res50_coarse"
+    ARL_MBV2_COARSE     = "arl_mbv2_coarse"
+    ARLV1_RES50_COARSE  = "arlv1_res50_coarse"
+    ARLV1_MBV2_COARSE   = "arlv1_mbv2_coarse"
+
+@unique
+class DecaDetailMethod(DecaMethod):
+    ARLV1_RES50_DETAIL  = "arlv1_res50_detail"
 
 
 class DecaCoarsePredictor(object):
@@ -45,6 +71,8 @@ class DecaCoarsePredictor(object):
         if model_config is None:
             model_config = DecaCoarsePredictor.create_model_config()
         self.model_config = model_config
+        # record the type of 3DMMs
+        self.tdmm_type = self.model_config.settings.tdmm_type.lower()
         
         # all the other settings for the predictor 
         if predictor_config is None:
@@ -61,8 +89,7 @@ class DecaCoarsePredictor(object):
         # load 3DMM and other related assets
         self.tdmm = DecaCoarsePredictor.load_tdmm(self.model_config.settings)
         self.tdmm.eval()
-        # record the type of 3DMMs
-        self.tdmm_type = self.model_config.settings.tdmm_type
+
         # record the trilist
         self.trilist = self.tdmm.get_trilist().copy()
 
@@ -80,7 +107,9 @@ class DecaCoarsePredictor(object):
     @staticmethod
     def create_model_config(name: str="arlv1_res50_coarse") -> ModelConfig:
         name = name.lower()
-        if name == "arml_res50_coarse":
+        assert DecaCoarseMethod.has_value(name), f"Unknown model name: {name}"
+        method = DecaCoarseMethod(name)
+        if method == DecaCoarseMethod.ARML_RES50_COARSE:
             return ModelConfig(
                 weight_path=osp.join(osp.dirname(__file__), "weights/arml_res50_coarse.pth"),
                 settings=DecaSettings(
@@ -92,7 +121,7 @@ class DecaCoarsePredictor(object):
                     ),
                 ),
             )
-        elif name == "arml_mbv2_coarse":
+        elif method == DecaCoarseMethod.ARML_MBV2_COARSE:
             return ModelConfig(
                 weight_path=osp.join(osp.dirname(__file__), "weights/arml_mbv2_coarse.pth"),
                 settings=DecaSettings(
@@ -104,7 +133,7 @@ class DecaCoarsePredictor(object):
                     ),
                 ),
             )
-        elif name == "arl_res50_coarse":
+        elif method == DecaCoarseMethod.ARL_RES50_COARSE:
             return ModelConfig(
                 weight_path=osp.join(osp.dirname(__file__), "weights/arl_res50_coarse.pth"),
                 settings=DecaSettings(
@@ -116,7 +145,7 @@ class DecaCoarsePredictor(object):
                     ),
                 ),
             )
-        elif name == "arl_mbv2_coarse":
+        elif method == DecaCoarseMethod.ARL_MBV2_COARSE:
             return ModelConfig(
                 weight_path=osp.join(osp.dirname(__file__), "weights/??.pth"),
                 settings=DecaSettings(
@@ -128,7 +157,7 @@ class DecaCoarsePredictor(object):
                     ),
                 ),
             )
-        elif name == "arlv1_res50_coarse":
+        elif method == DecaCoarseMethod.ARLV1_RES50_COARSE:
             return ModelConfig(
                 weight_path=osp.join(osp.dirname(__file__), "weights/arlv1_res50_coarse.pth"),
                 settings=DecaSettings(
@@ -140,7 +169,7 @@ class DecaCoarsePredictor(object):
                     ),
                 ),
             )
-        elif name == "arlv1_mbv2_coarse":
+        elif method == DecaCoarseMethod.ARLV1_MBV2_COARSE:
             return ModelConfig(
                 weight_path=osp.join(osp.dirname(__file__), "weights/??.pth"),
                 settings=DecaSettings(
@@ -152,7 +181,7 @@ class DecaCoarsePredictor(object):
                     ),
                 ),
             )             
-        elif name == "flame_res50_coarse":
+        elif method == DecaCoarseMethod.FLAME_RES50_COARSE:
             return ModelConfig(
                 weight_path=osp.join(osp.dirname(__file__), "weights/flame_res50_coarse.pth"),
                 settings=DecaSettings(
@@ -164,7 +193,7 @@ class DecaCoarsePredictor(object):
                     ),
                 ),
             )
-        elif name == "flame_mbv2_coarse":
+        elif method == DecaCoarseMethod.FLAME_MBV2_COARSE:
             return ModelConfig(
                 weight_path=osp.join(osp.dirname(__file__), "weights/flame_mbv2_coarse.pth"),
                 settings=DecaSettings(
@@ -313,3 +342,200 @@ class DecaCoarsePredictor(object):
 
     def get_trilist(self) -> np.array:
         return self.trilist
+
+
+class DecaDetailPredictor(DecaCoarsePredictor):
+    def __init__(
+        self, 
+        device: Union[str, torch.device]="cuda:0",
+        model_config: Optional[ModelConfig]=None,
+        predictor_config: Optional[PredictorConfig]=None,
+    ) -> None:
+        super(DecaDetailPredictor, self).__init__()
+        self.device = device
+        # all the settings for the network and the corresponding 3DMMs
+        if model_config is None:
+            model_config = DecaDetailPredictor.create_model_config()
+        self.model_config = model_config
+        # record the type of 3DMMs
+        self.tdmm_type = self.model_config.settings.tdmm_type.lower()
+        
+        # all the other settings for the predictor 
+        if predictor_config is None:
+            predictor_config = DecaDetailPredictor.create_predictor_config()
+        self.predictor_config = predictor_config
+        
+        # load coarse model 
+        self.coarse_net = DecaCoarse(config=self.model_config.settings)
+        self.coarse_net.load_state_dict(
+            torch.load(self.model_config.weight_path, map_location=self.device)["state_dict_coarse"]
+        )
+        self.coarse_net.eval()
+
+        # load detail model 
+        self.detail_net = DecaDetail(config=self.model_config.settings)
+        self.detail_net.load_state_dict(
+            torch.load(self.model_config.weight_path, map_location=self.device)["state_dict_detail"]
+        )
+        self.detail_net.eval()
+        
+        # load 3DMM and other related assets
+        self.tdmm = DecaDetailPredictor.load_tdmm(self.model_config.settings)
+        self.tdmm.eval()
+        # record the trilist
+        self.trilist = self.tdmm.get_trilist().copy()
+
+        # load synthesiser to get final displacement map and detail mesh
+        self.detail_synthesiser = DecaDetailPredictor.load_detail_synthesiser(
+            self.model_config.settings
+        )
+        self.detail_synthesiser.eval()
+
+        if self.predictor_config.use_jit:
+            input_size = self.model_config.settings.input_size
+            self.coarse_net = torch.jit.trace(
+                self.coarse_net, torch.rand(1, 3, input_size, input_size)
+            )
+            self.detail_net = torch.jit.script(self.detail_net)
+            self.tdmm = torch.jit.script(self.tdmm)
+            self.detail_synthesiser = torch.jit.script(self.detail_synthesiser)
+
+        self.coarse_net.to(self.device)
+        self.detail_net.to(self.device)
+        self.tdmm.to(self.device)
+        self.detail_synthesiser.to(self.device)
+
+    @staticmethod
+    def create_model_config(name: str="arlv1_res50_detail") -> ModelConfig:
+        name = name.lower()
+        assert DecaDetailMethod.has_value(name), f"Unknown model name: {name}"
+        method = DecaDetailMethod(name)        
+        if method == DecaDetailMethod.ARLV1_RES50_DETAIL:
+            return ModelConfig(
+                weight_path=osp.join(osp.dirname(__file__), "weights/arlv1_res50_detail.pth"),
+                settings=DecaSettings(
+                    tdmm_type="arlv1",
+                    backbone="resnet50",
+                    input_size=224,
+                    coarse_parameters=OrderedDict(
+                        {"shape": 33, "tex": 23, "exp": 52, "pose": 6, "cam": 3, "light": 27}
+                    ),
+                    detail_scale=10.0,
+                    detail_parameters=OrderedDict(
+                        {"exp": 52, "detail": 128}
+                    ),
+                ),
+            )
+        else:
+            raise ValueError(f"Unknown model name: {name}")
+
+    @staticmethod
+    def load_detail_synthesiser(config: DecaSettings) -> DetailSynthesiser:
+        tdmm_type = config.tdmm_type.lower()
+        if tdmm_type in "arlv1":
+            synthesiser = DetailSynthesiser(
+                osp.join(osp.dirname(__file__), "assets/ar_linear_v1")
+            )
+        else:
+            raise ValueError(f"Unknown 3DMM type for detail assets: {tdmm_type}")
+
+        return synthesiser
+
+    @torch.no_grad()
+    def __call__(
+        self, image: np.ndarray, landmarks: np.ndarray, rgb: bool=True,
+    ) -> List[Dict]:
+        if landmarks.size > 0:
+            # DECA expects RGB image as input
+            if not rgb:
+                image = image[..., ::-1]
+            # convert to (bs, n_lmk, 2)
+            if landmarks.ndim == 2:
+                landmarks = landmarks[np.newaxis, ...]
+
+            # Crop the faces
+            bboxes = []
+            batch_face = []
+            batch_tform = []
+            input_size = self.model_config.settings.input_size
+            for lms in landmarks:
+                bbox = parse_bbox_from_landmarks(lms)
+                bboxes.append(bbox)
+                src_size, src_center = bbox2point(bbox)
+                # move the detected face to a standard frame
+                tform = compute_similarity_transform(src_size, src_center, input_size)
+                batch_tform.append(tform.params)
+                crop_image = transform_image_cv2(image / 255., tform, input_size)
+                batch_face.append(crop_image)
+
+            # (bs, 4)
+            bboxes = np.array(bboxes)
+            # (bs, 3, 3)
+            batch_tform = np.array(batch_tform)
+            batch_tform = torch.from_numpy(batch_tform).float().to(self.device)
+            # (bs, C, H, W)
+            batch_face = np.array(batch_face).transpose((0, 3, 1, 2))
+            batch_face = torch.from_numpy(batch_face).float().to(self.device)
+
+            # Get coarse parameters including 3DMMs, pose, light, camera.
+            coarse_params = self.coarse_net(batch_face)
+
+            # Parse coarse parameters according to the config
+            params_dict = self.parse_parameters(coarse_params)
+
+            # Clamp the expression parameters for certain 3DMMs
+            if self.tdmm_type in ["arl", "arml"]:
+                params_dict["exp"] = torch.clamp(params_dict["exp"], min=0.0, max=1.0)
+            elif self.tdmm_type in ["arlv1"]:
+                params_dict["exp"] = torch.sigmoid(params_dict["exp"])
+
+            # Get detail parameters
+            detail_params = self.detail_net(batch_face)
+            params_dict["detail"] = detail_params
+            uv_z = self.detail_net.decode(params_dict)
+
+            # Reconstruct using shape, expression and pose parameters
+            # Results are in world coordinates, we will bring them to the original image space3
+            # Also returns face poses (bs, 3) in radians with yaw-pitch-roll order
+            vertices_world, landmarks2d_world, landmarks3d_world, face_poses = self.tdmm(
+                shape_params=params_dict["shape"],
+                expression_params=params_dict["exp"],
+                pose_params=params_dict["pose"],
+            )
+
+            # Get projected vertices and landmarks in the crop image space
+            landmarks2d = batch_orth_proj(landmarks2d_world, params_dict["cam"])[..., :2]
+            landmarks2d[..., 1:] = -landmarks2d[..., 1:]
+            
+            landmarks3d = batch_orth_proj(landmarks3d_world, params_dict["cam"])
+            landmarks3d[..., 1:] = -landmarks3d[..., 1:]
+            
+            vertices = batch_orth_proj(vertices_world, params_dict["cam"])
+            vertices[..., 1:] = -vertices[..., 1:]
+
+            # Recover to the original image space
+            batch_inv_tform = torch.inverse(batch_tform).transpose(1,2).to(self.device)
+
+            landmarks2d = transform_to_image_space(landmarks2d, batch_inv_tform, input_size)
+            landmarks3d = transform_to_image_space(landmarks3d, batch_inv_tform, input_size)
+            vertices = transform_to_image_space(vertices, batch_inv_tform, input_size)
+
+            batch_size = landmarks.shape[0]
+            results = []
+            for i in range(batch_size):
+                results.append(
+                    {
+                        "bboxes": bboxes[i], # (4,)
+                        "params_dict": {k:v[i].cpu().numpy() for k, v in params_dict.items()},
+                        "vertices": vertices[i].cpu().numpy(), # (nv, 3)
+                        "landmarks2d": landmarks2d[i].cpu().numpy(), # (n_lmk, 2)
+                        "landmarks3d": landmarks3d[i].cpu().numpy(), # (n_lmk, 3)
+                        "vertices_world": vertices_world[i].cpu().numpy(), # (nv, 3)
+                        "landmarks3d_world": landmarks3d_world[i].cpu().numpy(), # (n_lmk, 3)
+                        "face_poses": face_poses[i].cpu().numpy(), # (3,)
+                        "uv_z": uv_z[i].cpu().numpy(), # (C, H, W)
+                    }
+                )
+            return results
+        else:
+            return []
