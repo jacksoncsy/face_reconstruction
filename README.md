@@ -11,6 +11,7 @@ This repo has the inference codes for 3D face reconstruction based on [DECA](htt
 * [Numpy](https://www.numpy.org/): `pip install numpy`
 * [OpenCV](https://opencv.org/): `pip install opencv-python`
 * [PyTorch](https://pytorch.org/): `pip install torch torchvision`
+* [PyTorch3D](https://github.com/facebookresearch/pytorch3d/blob/main/INSTALL.md#2-install-from-a-local-clone): Recommend to install from a local clone
 * [scikit-image](https://scikit-image.org/): `pip install scikit-image`
 * [Scipy](https://www.scipy.org/): `pip install scipy`
 ### Modules needed for test script
