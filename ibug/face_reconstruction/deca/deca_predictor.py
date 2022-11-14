@@ -474,7 +474,7 @@ class DecaDetailPredictor(DecaCoarsePredictor):
         method = DecaDetailModelName(name)        
         if method == DecaDetailModelName.ARLV1_RES50_DETAIL:
             return ModelConfig(
-                weight_path=osp.join(osp.dirname(__file__), "weights/arlv1_res50_detail.pth"),
+                weight_path=osp.join(osp.dirname(__file__), "weights/arlv1_res50_detail_test.pth"),
                 settings=DecaSettings(
                     tdmm_type="arlv1",
                     backbone="resnet50",
