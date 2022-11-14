@@ -69,7 +69,7 @@ def main() -> None:
     )
     parser.add_argument(
         "--show-reconstruction-rendering", "-srr", action="store_true", default=False,
-        help="Visualise 2D-style landmarks from face reconstruction (default=False)",
+        help="Visualise reconstructed mesh (default=False)",
     )
     parser.add_argument(
         "--hide-reconstruction-pose", "-hrp", action="store_true", default=False,
@@ -115,11 +115,13 @@ def main() -> None:
         # Create the DECA coarse/detail reconstructor
         rw = args.reconstruction_weights
         if DecaCoarseModelName.has_value(rw):
+            use_detail = False
             frec_model = DecaCoarsePredictor.create_model_config(rw)
             face_reconstructor = DecaCoarsePredictor(
                 device=args.reconstruction_device, model_config=frec_model,
             )
         elif DecaDetailModelName.has_value(rw):
+            use_detail = True
             frec_model = DecaDetailPredictor.create_model_config(rw)
             face_reconstructor = DecaDetailPredictor(
                 device=args.reconstruction_device, model_config=frec_model,
@@ -200,6 +202,23 @@ def main() -> None:
                     if args.show_reconstruction_landmarks2d:
                         landmarks2d = result["landmarks2d"]
                         plot_landmarks(frame, landmarks2d, line_colour=(255, 0, 0))
+                    if args.show_reconstruction_rendering:
+                        # render detailed mesh if using detail model
+                        if use_detail:
+                            vertices_world = result["dense_vertices_world"]
+                            tri_faces = result["dense_faces"]
+                        else:
+                            vertices_world = result["vertices_world"]
+                            tri_faces = face_reconstructor.trilist
+                        
+                        frame = face_reconstructor.render_shape_to_image(
+                            frame[None, ...],
+                            vertices_world[None, ...],
+                            tri_faces[None, ...],
+                            result["inverse_transform"][None, ...],
+                            result["params_dict"]["cam"][None, ...],
+                        )
+                        frame = np.ascontiguousarray(frame[0])
                     if not args.hide_reconstruction_landmarks3d:
                         landmarks3d = result["landmarks3d"][:, :2]
                         plot_landmarks(frame, landmarks3d)

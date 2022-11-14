@@ -1,4 +1,4 @@
-import os
+import cv2
 import os.path as osp
 import torch
 import numpy as np
@@ -13,11 +13,15 @@ from .deca_utils import (
     batch_orth_proj,
     bbox2point,
     compute_similarity_transform,
+    compute_vertex_normals,
     parse_bbox_from_landmarks,
     transform_image_cv2,
     transform_to_image_space,
+    transform_to_normalised_image_space,
+    write_obj,
 )
 from .tdmm import FLAME, ARMultilinear, ARLinear, DetailSynthesiser
+from .renderer import MeshRenderer
 
 
 __all__ = ["DecaCoarsePredictor", "DecaDetailPredictor"]
@@ -89,9 +93,12 @@ class DecaCoarsePredictor(object):
         # load 3DMM and other related assets
         self.tdmm = DecaCoarsePredictor.load_tdmm(self.model_config.settings)
         self.tdmm.eval()
-
         # record the trilist
         self.trilist = self.tdmm.get_trilist().copy()
+
+        # load a mesh renderer
+        self.mesh_renderer = MeshRenderer()
+        self.mesh_renderer.eval()
 
         if self.predictor_config.use_jit:
             input_size = self.model_config.settings.input_size
@@ -103,6 +110,7 @@ class DecaCoarsePredictor(object):
 
         self.net.to(self.device)
         self.tdmm.to(self.device)
+        self.mesh_renderer.to(self.device)
 
     @staticmethod
     def create_model_config(name: str="arlv1_res50_coarse") -> ModelConfig:
@@ -237,9 +245,11 @@ class DecaCoarsePredictor(object):
 
     @torch.no_grad()
     def __call__(
-        self, image: np.ndarray, landmarks: np.ndarray, rgb: bool=True,
+        self, image: np.ndarray, landmarks: np.ndarray, rgb: bool=True
     ) -> List[Dict]:
         if landmarks.size > 0:
+            batch_size = landmarks.shape[0]
+            h, w = image.shape[:2]
             # DECA expects RGB image as input
             if not rgb:
                 image = image[..., ::-1]
@@ -309,7 +319,6 @@ class DecaCoarsePredictor(object):
             landmarks3d = transform_to_image_space(landmarks3d, batch_inv_tform, input_size)
             vertices = transform_to_image_space(vertices, batch_inv_tform, input_size)
 
-            batch_size = landmarks.shape[0]
             results = []
             for i in range(batch_size):
                 results.append(
@@ -322,15 +331,17 @@ class DecaCoarsePredictor(object):
                         "vertices_world": vertices_world[i].cpu().numpy(), # (nv, 3)
                         "landmarks3d_world": landmarks3d_world[i].cpu().numpy(), # (n_lmk, 3)
                         "face_poses": face_poses[i].cpu().numpy(), # (3,)
+                        "inverse_transform": batch_inv_tform[i].cpu().numpy(), # (3,)
                     }
                 )
             return results
         else:
             return []
 
-    def parse_parameters(self, parameters: torch.tensor) -> Dict:
+    def parse_parameters(self, parameters: torch.Tensor) -> Dict:
         """
-        parameters: (bs, n_params), parameters predicted by deca
+        args:
+            parameters (bs, n_params): parameters predicted by deca
         """
         params_dict = {}
         curr_i = 0
@@ -342,6 +353,52 @@ class DecaCoarsePredictor(object):
 
     def get_trilist(self) -> np.array:
         return self.trilist
+
+    def render_shape_to_image(
+        self,
+        image: np.array,
+        vertices: np.array,
+        tri_faces: np.array,
+        tform: np.array,
+        cam: np.array,
+    ) -> np.array:
+        """
+        args:
+            image (bs, h, w, c): original image
+            vertices (bs, nv, 3): vertices in world coordinates (not image coordinates!)
+            tri_faces (bs, ntri, 3): triangles
+            tform (bs, 3, 3): similarity transform from crop image back to the original
+            cam: (bs, 3): orthographic projection from world space to image space
+        """
+        batch_size = vertices.shape[0]
+        h, w = image.shape[1:3]
+
+        vertices = torch.from_numpy(vertices).to(self.device)
+        tri_faces = torch.from_numpy(tri_faces).long().to(self.device)
+        tform = torch.from_numpy(tform).to(self.device)
+        cam = torch.from_numpy(cam).to(self.device)
+
+        image_tensor = torch.from_numpy(image.transpose((0, 3, 1, 2)) / 255.).float()
+        batch_image = image_tensor.expand(batch_size, -1, -1, -1)
+        batch_image = batch_image.to(self.device)
+
+        # get normalised vertices with regard to original image resolution
+        vertices_image = batch_orth_proj(vertices, cam)
+        vertices_image[..., 1:] = -vertices_image[..., 1:]
+        vertices_normalised = transform_to_normalised_image_space(
+            vertices_image, tform, self.model_config.settings.input_size, (h, w)
+        )
+
+        rendered_images = self.mesh_renderer.render_shape(
+            vertices, vertices_normalised, tri_faces, h, w, images=batch_image
+        )
+        # convert to uint8
+        rendered_images = torch.clamp(rendered_images, min=0.0, max=1.0)
+        # (bs, c, h, w) -> (bs, h, w, c)
+        rendered_images = rendered_images.permute(0, 2, 3, 1).cpu().numpy()
+        rendered_images = (255.0 * rendered_images).astype(np.uint8)
+
+        return rendered_images
 
 
 class DecaDetailPredictor(DecaCoarsePredictor):
@@ -391,6 +448,10 @@ class DecaDetailPredictor(DecaCoarsePredictor):
         )
         self.detail_synthesiser.eval()
 
+        # load a mesh renderer
+        self.mesh_renderer = MeshRenderer()
+        self.mesh_renderer.eval()
+
         if self.predictor_config.use_jit:
             input_size = self.model_config.settings.input_size
             self.coarse_net = torch.jit.trace(
@@ -403,6 +464,7 @@ class DecaDetailPredictor(DecaCoarsePredictor):
         self.coarse_net.to(self.device)
         self.detail_net.to(self.device)
         self.tdmm.to(self.device)
+        self.mesh_renderer.to(self.device)
         self.detail_synthesiser.to(self.device)
 
     @staticmethod
@@ -443,9 +505,10 @@ class DecaDetailPredictor(DecaCoarsePredictor):
 
     @torch.no_grad()
     def __call__(
-        self, image: np.ndarray, landmarks: np.ndarray, rgb: bool=True,
+        self, image: np.ndarray, landmarks: np.ndarray, rgb: bool=True
     ) -> List[Dict]:
         if landmarks.size > 0:
+            batch_size = landmarks.shape[0]
             # DECA expects RGB image as input
             if not rgb:
                 image = image[..., ::-1]
@@ -493,6 +556,7 @@ class DecaDetailPredictor(DecaCoarsePredictor):
             detail_params = self.detail_net(batch_face)
             params_dict["detail"] = detail_params
             uv_z = self.detail_net.decode(params_dict)
+            displacement_map = self.detail_synthesiser(uv_z)
 
             # Reconstruct using shape, expression and pose parameters
             # Results are in world coordinates, we will bring them to the original image space3
@@ -520,7 +584,15 @@ class DecaDetailPredictor(DecaCoarsePredictor):
             landmarks3d = transform_to_image_space(landmarks3d, batch_inv_tform, input_size)
             vertices = transform_to_image_space(vertices, batch_inv_tform, input_size)
 
-            batch_size = landmarks.shape[0]
+            # Get the detail mesh
+            tri_faces = torch.from_numpy(self.trilist[None, ...]).to(self.device)
+            tri_faces = tri_faces.expand(batch_size, -1, -1)
+            detail_results = self.detail_synthesiser.upsample_mesh(
+                vertices_world, tri_faces, displacement_map
+            )
+            dense_vertices_world = detail_results["dense_vertices"]
+            dense_faces = detail_results["dense_faces"]
+
             results = []
             for i in range(batch_size):
                 results.append(
@@ -533,7 +605,10 @@ class DecaDetailPredictor(DecaCoarsePredictor):
                         "vertices_world": vertices_world[i].cpu().numpy(), # (nv, 3)
                         "landmarks3d_world": landmarks3d_world[i].cpu().numpy(), # (n_lmk, 3)
                         "face_poses": face_poses[i].cpu().numpy(), # (3,)
-                        "uv_z": uv_z[i].cpu().numpy(), # (C, H, W)
+                        "inverse_transform": batch_inv_tform[i].cpu().numpy(), # (3,)
+                        "uv_z": uv_z[i].cpu().numpy().transpose((1, 2, 0)), # (h, w, c)
+                        "dense_vertices_world": dense_vertices_world[i].cpu().numpy(), # (nv_dense, 3)
+                        "dense_faces": dense_faces[i].cpu().numpy(), # (ntri_dense, 3)
                     }
                 )
             return results

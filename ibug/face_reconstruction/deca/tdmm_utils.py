@@ -3,24 +3,26 @@ import torch
 import torch.nn.functional as F
 
 
-def batch_rigid_transform(rot_mats, joints, parents):
+def batch_rigid_transform(
+    rot_mats: torch.Tensor, joints: torch.Tensor, parents: torch.Tensor
+):
     """
     Applies a batch of rigid transformations to the joints
 
     Parameters
     ----------
-    rot_mats : torch.tensor BxNx3x3
+    rot_mats: (bs, n, 3, 3)
         Tensor of rotation matrices
-    joints : torch.tensor BxNx3
+    joints: (bs, n, 3)
         Locations of joints
-    parents : torch.tensor BxN
+    parents : (bs, n)
         The kinematic tree of each object
 
     Returns
     -------
-    posed_joints : torch.tensor BxNx3
+    posed_joints: (bs, n, 3)
         The locations of the joints after applying the pose rotations
-    rel_transforms : torch.tensor BxNx4x4
+    rel_transforms:  (bs, n, 4, ,4)
         The relative (with respect to the root joint) rigid transformations
         for all the joints
     """
@@ -58,15 +60,15 @@ def batch_rigid_transform(rot_mats, joints, parents):
     return posed_joints, rel_transforms
 
 
-def batch_rodrigues(rot_vecs, dtype: torch.dtype = torch.float32):
+def batch_rodrigues(rot_vecs: torch.Tensor, dtype: torch.dtype = torch.float32):
     ''' Calculates the rotation matrices for a batch of rotation vectors
         Parameters
         ----------
-        rot_vecs: torch.tensor Nx3
+        rot_vecs: Nx3
             array of N axis-angle vectors
         Returns
         -------
-        R: torch.tensor Nx3x3
+        R: Nx3x3
             The rotation matrices for the given axis-angle parameters
     '''
     batch_size = rot_vecs.shape[0]
@@ -90,18 +92,18 @@ def batch_rodrigues(rot_vecs, dtype: torch.dtype = torch.float32):
     return rot_mat
 
 
-def blend_shapes(betas, shape_disps):
+def blend_shapes(betas: torch.Tensor, shape_disps: torch.Tensor):
     ''' Calculates the per vertex displacement due to the blend shapes
     Parameters
     ----------
-    betas : torch.tensor Bx(num_betas)
+    betas : Bx(num_betas)
         Blend shape coefficients
-    shape_disps: torch.tensor Vx3x(num_betas)
+    shape_disps: Vx3x(num_betas)
         Blend shapes
 
     Returns
     -------
-    torch.tensor BxVx3
+    BxVx3
         The per-vertex displacement due to shape deformation
     '''
     # Displacement[b, m, k] = sum_{l} betas[b, l] * shape_disps[m, k, l]

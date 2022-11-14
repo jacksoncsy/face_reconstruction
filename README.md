@@ -2,6 +2,8 @@
 This repo has the inference codes for 3D face reconstruction based on [DECA](https://arxiv.org/pdf/2012.04012.pdf) with some pretrained weights. We currently support blendshape model [FLAME](https://flame.is.tue.mpg.de/index.html). 
 
 **\[Updates\]**
+ - `2022.11.14`: Support rendering reconstructed mesh
+ - `2022.11.12`: Support inference with detail model
  - `2022.11.01`: Support inference with 100 landmarks, better expression regularisation
  - `2022.10.11`: Support inference with AR linear model
 

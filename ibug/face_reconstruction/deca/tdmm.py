@@ -5,6 +5,7 @@ import pickle
 import os.path as osp
 
 from typing import Union
+from .deca_utils import compute_vertex_normals
 from .tdmm_utils import (
     batch_rodrigues,
     lbs,
@@ -725,14 +726,14 @@ class DetailSynthesiser(nn.Module):
             osp.join(tdmm_dir, dense_template_name), allow_pickle=True, encoding="latin1"
         ).item()
 
-        self.register_buffer("dense_faces", torch.tensor(dense_template["f"]).int())
-        self.register_buffer("x_coords", torch.tensor(dense_template["x_coords"]).int())
-        self.register_buffer("y_coords", torch.tensor(dense_template["y_coords"]).int())
+        self.register_buffer("dense_faces", torch.tensor(dense_template["f"]).long())
+        self.register_buffer("x_coords", torch.tensor(dense_template["x_coords"]).long())
+        self.register_buffer("y_coords", torch.tensor(dense_template["y_coords"]).long())
         self.register_buffer(
-            "valid_pixel_ids", torch.tensor(dense_template["valid_pixel_ids"]).int()
+            "valid_pixel_ids", torch.tensor(dense_template["valid_pixel_ids"]).long()
         )
         self.register_buffer(
-            "valid_pixel_3d_faces", torch.tensor(dense_template["valid_pixel_3d_faces"]).int()
+            "valid_pixel_3d_faces", torch.tensor(dense_template["valid_pixel_3d_faces"]).long()
         )
         self.register_buffer(
             "valid_pixel_b_coords", torch.tensor(dense_template["valid_pixel_b_coords"]).float()
@@ -748,11 +749,17 @@ class DetailSynthesiser(nn.Module):
         return uv_z + self.fixed_uv_dis[None, None, ...]
     
     @torch.jit.export
-    def upsample_mesh(self, vertices, normals, displacement_map, texture_map: Union[None, torch.Tensor]=None):
+    def upsample_mesh(
+        self,
+        vertices: torch.Tensor,
+        tri_faces: torch.Tensor,
+        displacement_map: torch.Tensor,
+        texture_map: Union[None, torch.Tensor] = None,
+    ):
         """ 
         upsampling coarse mesh (with displacment map)
             vertices: vertices of coarse mesh, [bs, nv, 3]
-            normals: vertex normals, [bs, nv, 3]
+            tri_faces: triangles, [bs, ntri, 3]
             texture_map: texture map, [bs, 256, 256, 3]
             displacement_map: displacment map, [bs, 1, 256, 256]
         Returns: 
@@ -760,6 +767,7 @@ class DetailSynthesiser(nn.Module):
             dense_faces: [bs, number of dense faces, 3]
             (Optional) dense_colors: vertex color, [bs, number of dense vertices, 3]
         """
+        normals = compute_vertex_normals(vertices, tri_faces)
         pixel_3d_points = \
             vertices[:, self.valid_pixel_3d_faces[:, 0]] * self.valid_pixel_b_coords[:, [0]][None, ...] + \
             vertices[:, self.valid_pixel_3d_faces[:, 1]] * self.valid_pixel_b_coords[:, [1]][None, ...] + \
@@ -778,7 +786,10 @@ class DetailSynthesiser(nn.Module):
         batch_size = vertices.shape[0]
         dense_faces = self.dense_faces.expand(batch_size, -1, 3)
 
-        output_dict = {"dense_vertices": dense_vertices, "dense_faces": dense_faces}
+        output_dict = {
+            "dense_vertices": dense_vertices,
+            "dense_faces": dense_faces,
+        }
         if texture_map is not None:
             output_dict["dense_colors"] = texture_map[
                 :, self.y_coords[self.valid_pixel_ids], self.x_coords[self.valid_pixel_ids]
