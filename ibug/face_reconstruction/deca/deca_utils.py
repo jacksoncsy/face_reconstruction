@@ -32,7 +32,7 @@ def bbox2point(bbox):
     return size, center
 
 
-def check_light(light_params: np.array, threshold: float=15.) -> bool:
+def check_light(light_params: np.ndarray, threshold: float=15.) -> bool:
     """
     light_params: (27,), lighting parameters
     """
@@ -41,7 +41,7 @@ def check_light(light_params: np.array, threshold: float=15.) -> bool:
     
 
 def check_2d_landmarks(
-    gt_landmarks: np.array, pred_landmarks: np.array, threshold: float=0.2,
+    gt_landmarks: np.ndarray, pred_landmarks: np.ndarray, threshold: float=0.2,
 ) -> bool:
     """
     gt_landmarks: (n_lmk, 2), ground truth 2D landmarks
@@ -138,7 +138,7 @@ def compute_vertex_normals(vertices: torch.Tensor, faces: torch.Tensor):
     return vertex_normals
     
 
-def parse_bbox_from_landmarks(landmarks: np.array):
+def parse_bbox_from_landmarks(landmarks: np.ndarray):
     left = np.min(landmarks[:, 0])
     right = np.max(landmarks[:, 0])
     top = np.min(landmarks[:, 1])
@@ -148,14 +148,14 @@ def parse_bbox_from_landmarks(landmarks: np.array):
 
 
 def transform_image(
-    image: np.array, tform: _geometric.GeometricTransform, crop_size: int,
-) -> np.array:
+    image: np.ndarray, tform: _geometric.GeometricTransform, crop_size: int,
+) -> np.ndarray:
     return warp(image, tform.inverse, output_shape=(crop_size, crop_size))
 
 
 def transform_image_cv2(
-    image: np.array, tform: _geometric.GeometricTransform, crop_size: int,
-) -> np.array:
+    image: np.ndarray, tform: _geometric.GeometricTransform, crop_size: int,
+) -> np.ndarray:
     return cv2.warpAffine(
         image,
         tform.params[:2],
@@ -223,13 +223,13 @@ def transform_to_normalised_image_space(
 
 def write_obj(
     save_path: str,
-    vertices: np.array,
-    faces: np.array,
-    colors: Union[np.array, None] = None,
-    texture: Union[np.array, None] = None,
-    uvcoords: Union[np.array, None] = None,
-    uvfaces: Union[np.array, None] = None,
-    normal_map: Union[np.array, None] = None,
+    vertices: np.ndarray,
+    faces: np.ndarray,
+    colors: Union[np.ndarray, None] = None,
+    texture: Union[np.ndarray, None] = None,
+    uvcoords: Union[np.ndarray, None] = None,
+    uvfaces: Union[np.ndarray, None] = None,
+    normal_map: Union[np.ndarray, None] = None,
     inverse_face_order: bool = False,
 ):
     """ Save 3D face model with texture. 

@@ -351,17 +351,17 @@ class DecaCoarsePredictor(object):
         
         return params_dict
 
-    def get_trilist(self) -> np.array:
+    def get_trilist(self) -> np.ndarray:
         return self.trilist
 
     def render_shape_to_image(
         self,
-        image: np.array,
-        vertices: np.array,
-        tri_faces: np.array,
-        tform: np.array,
-        cam: np.array,
-    ) -> np.array:
+        image: np.ndarray,
+        vertices: np.ndarray,
+        tri_faces: np.ndarray,
+        tform: np.ndarray,
+        cam: np.ndarray,
+    ) -> np.ndarray:
         """
         args:
             image (bs, h, w, c): original image
