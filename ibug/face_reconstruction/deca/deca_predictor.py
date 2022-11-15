@@ -77,6 +77,8 @@ class DecaCoarsePredictor(object):
         self.model_config = model_config
         # record the type of 3DMMs
         self.tdmm_type = self.model_config.settings.tdmm_type.lower()
+        # record resolution of network input image
+        self.input_size = model_config.settings.input_size
         
         # all the other settings for the predictor 
         if predictor_config is None:
@@ -101,10 +103,8 @@ class DecaCoarsePredictor(object):
         self.mesh_renderer.eval()
 
         if self.predictor_config.use_jit:
-            input_size = self.model_config.settings.input_size
             self.net = torch.jit.trace(
-                self.net,
-                torch.rand(1, 3, input_size, input_size),
+                self.net, torch.rand(1, 3, self.input_size, self.input_size)
             )
             self.tdmm = torch.jit.script(self.tdmm)
 
@@ -261,15 +261,14 @@ class DecaCoarsePredictor(object):
             bboxes = []
             batch_face = []
             batch_tform = []
-            input_size = self.model_config.settings.input_size
             for lms in landmarks:
                 bbox = parse_bbox_from_landmarks(lms)
                 bboxes.append(bbox)
                 src_size, src_center = bbox2point(bbox)
                 # move the detected face to a standard frame
-                tform = compute_similarity_transform(src_size, src_center, input_size)
+                tform = compute_similarity_transform(src_size, src_center, self.input_size)
                 batch_tform.append(tform.params)
-                crop_image = transform_image_cv2(image / 255., tform, input_size)
+                crop_image = transform_image_cv2(image / 255., tform, self.input_size)
                 batch_face.append(crop_image)
 
             # (bs, 4)
@@ -315,9 +314,15 @@ class DecaCoarsePredictor(object):
             # Recover to the original image space
             batch_inv_tform = torch.inverse(batch_tform).transpose(1,2).to(self.device)
 
-            landmarks2d = transform_to_image_space(landmarks2d, batch_inv_tform, input_size)
-            landmarks3d = transform_to_image_space(landmarks3d, batch_inv_tform, input_size)
-            vertices = transform_to_image_space(vertices, batch_inv_tform, input_size)
+            landmarks2d = transform_to_image_space(
+                landmarks2d, batch_inv_tform, self.input_size
+            )
+            landmarks3d = transform_to_image_space(
+                landmarks3d, batch_inv_tform, self.input_size
+            )
+            vertices = transform_to_image_space(
+                vertices, batch_inv_tform, self.input_size
+            )
 
             results = []
             for i in range(batch_size):
@@ -386,7 +391,7 @@ class DecaCoarsePredictor(object):
         vertices_image = batch_orth_proj(vertices, cam)
         vertices_image[..., 1:] = -vertices_image[..., 1:]
         vertices_normalised = transform_to_normalised_image_space(
-            vertices_image, tform, self.model_config.settings.input_size, (h, w)
+            vertices_image, tform, self.input_size, (h, w)
         )
 
         rendered_images = self.mesh_renderer.render_shape(
@@ -416,6 +421,8 @@ class DecaDetailPredictor(DecaCoarsePredictor):
         self.model_config = model_config
         # record the type of 3DMMs
         self.tdmm_type = self.model_config.settings.tdmm_type.lower()
+        # record resolution of network input image
+        self.input_size = model_config.settings.input_size        
         
         # all the other settings for the predictor 
         if predictor_config is None:
@@ -453,9 +460,8 @@ class DecaDetailPredictor(DecaCoarsePredictor):
         self.mesh_renderer.eval()
 
         if self.predictor_config.use_jit:
-            input_size = self.model_config.settings.input_size
             self.coarse_net = torch.jit.trace(
-                self.coarse_net, torch.rand(1, 3, input_size, input_size)
+                self.coarse_net, torch.rand(1, 3, self.input_size, self.input_size)
             )
             self.detail_net = torch.jit.script(self.detail_net)
             self.tdmm = torch.jit.script(self.tdmm)
@@ -520,15 +526,14 @@ class DecaDetailPredictor(DecaCoarsePredictor):
             bboxes = []
             batch_face = []
             batch_tform = []
-            input_size = self.model_config.settings.input_size
             for lms in landmarks:
                 bbox = parse_bbox_from_landmarks(lms)
                 bboxes.append(bbox)
                 src_size, src_center = bbox2point(bbox)
                 # move the detected face to a standard frame
-                tform = compute_similarity_transform(src_size, src_center, input_size)
+                tform = compute_similarity_transform(src_size, src_center, self.input_size)
                 batch_tform.append(tform.params)
-                crop_image = transform_image_cv2(image / 255., tform, input_size)
+                crop_image = transform_image_cv2(image / 255., tform, self.input_size)
                 batch_face.append(crop_image)
 
             # (bs, 4)
@@ -580,9 +585,15 @@ class DecaDetailPredictor(DecaCoarsePredictor):
             # Recover to the original image space
             batch_inv_tform = torch.inverse(batch_tform).transpose(1,2).to(self.device)
 
-            landmarks2d = transform_to_image_space(landmarks2d, batch_inv_tform, input_size)
-            landmarks3d = transform_to_image_space(landmarks3d, batch_inv_tform, input_size)
-            vertices = transform_to_image_space(vertices, batch_inv_tform, input_size)
+            landmarks2d = transform_to_image_space(
+                landmarks2d, batch_inv_tform, self.input_size
+            )
+            landmarks3d = transform_to_image_space(
+                landmarks3d, batch_inv_tform, self.input_size
+            )
+            vertices = transform_to_image_space(
+                vertices, batch_inv_tform, self.input_size
+            )
 
             # Get the detail mesh
             tri_faces = torch.from_numpy(self.trilist[None, ...]).to(self.device)
