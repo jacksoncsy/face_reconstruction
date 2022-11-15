@@ -74,35 +74,34 @@ class DecaCoarsePredictor(object):
         # all the settings for the network and the corresponding 3DMMs
         if model_config is None:
             model_config = DecaCoarsePredictor.create_model_config()
-        self.model_config = model_config
-        # record the type of 3DMMs
-        self.tdmm_type = self.model_config.settings.tdmm_type.lower()
-        # record resolution of network input image
-        self.input_size = model_config.settings.input_size
         
         # all the other settings for the predictor 
         if predictor_config is None:
             predictor_config = DecaCoarsePredictor.create_predictor_config()
-        self.predictor_config = predictor_config
         
         # load network to predict parameters
-        self.net = DecaCoarse(config=self.model_config.settings)
+        self.net = DecaCoarse(config=model_config.settings)
         self.net.load_state_dict(
-            torch.load(self.model_config.weight_path, map_location=self.device)["state_dict"]
+            torch.load(model_config.weight_path, map_location=self.device)["state_dict"]
         )
         self.net.eval()
         
         # load 3DMM and other related assets
-        self.tdmm = DecaCoarsePredictor.load_tdmm(self.model_config.settings)
+        self.tdmm = DecaCoarsePredictor.load_tdmm(model_config.settings)
         self.tdmm.eval()
+
+        # record the type of 3DMMs
+        self.tdmm_type = model_config.settings.tdmm_type.lower()
         # record the trilist
         self.trilist = self.tdmm.get_trilist().copy()
-
+        # record resolution of network input image
+        self.input_size = model_config.settings.input_size
+        
         # load a mesh renderer
         self.mesh_renderer = MeshRenderer()
         self.mesh_renderer.eval()
 
-        if self.predictor_config.use_jit:
+        if predictor_config.use_jit:
             self.net = torch.jit.trace(
                 self.net, torch.rand(1, 3, self.input_size, self.input_size)
             )
@@ -350,7 +349,7 @@ class DecaCoarsePredictor(object):
         """
         params_dict = {}
         curr_i = 0
-        for k, v in self.model_config.settings.coarse_parameters.items():
+        for k, v in self.config.model_config.settings.coarse_parameters.items():
             params_dict[k] = parameters[:, curr_i:curr_i+v]
             curr_i += v
         
@@ -417,49 +416,46 @@ class DecaDetailPredictor(DecaCoarsePredictor):
         self.device = device
         # all the settings for the network and the corresponding 3DMMs
         if model_config is None:
-            model_config = DecaDetailPredictor.create_model_config()
-        self.model_config = model_config
-        # record the type of 3DMMs
-        self.tdmm_type = self.model_config.settings.tdmm_type.lower()
-        # record resolution of network input image
-        self.input_size = model_config.settings.input_size        
+            model_config = DecaDetailPredictor.create_model_config()         
         
         # all the other settings for the predictor 
         if predictor_config is None:
             predictor_config = DecaDetailPredictor.create_predictor_config()
-        self.predictor_config = predictor_config
         
         # load coarse model 
-        self.coarse_net = DecaCoarse(config=self.model_config.settings)
+        self.coarse_net = DecaCoarse(config=model_config.settings)
         self.coarse_net.load_state_dict(
-            torch.load(self.model_config.weight_path, map_location=self.device)["state_dict_coarse"]
+            torch.load(model_config.weight_path, map_location=self.device)["state_dict_coarse"]
         )
         self.coarse_net.eval()
 
         # load detail model 
-        self.detail_net = DecaDetail(config=self.model_config.settings)
+        self.detail_net = DecaDetail(config=model_config.settings)
         self.detail_net.load_state_dict(
-            torch.load(self.model_config.weight_path, map_location=self.device)["state_dict_detail"]
+            torch.load(model_config.weight_path, map_location=self.device)["state_dict_detail"]
         )
         self.detail_net.eval()
         
         # load 3DMM and other related assets
-        self.tdmm = DecaDetailPredictor.load_tdmm(self.model_config.settings)
+        self.tdmm = DecaDetailPredictor.load_tdmm(model_config.settings)
         self.tdmm.eval()
+
+        # record the type of 3DMMs
+        self.tdmm_type = model_config.settings.tdmm_type.lower()
         # record the trilist
         self.trilist = self.tdmm.get_trilist().copy()
-
+        # record resolution of network input image
+        self.input_size = model_config.settings.input_size
+        
         # load synthesiser to get final displacement map and detail mesh
-        self.detail_synthesiser = DecaDetailPredictor.load_detail_synthesiser(
-            self.model_config.settings
-        )
+        self.detail_synthesiser = DecaDetailPredictor.load_detail_synthesiser(model_config.settings)
         self.detail_synthesiser.eval()
 
         # load a mesh renderer
         self.mesh_renderer = MeshRenderer()
         self.mesh_renderer.eval()
 
-        if self.predictor_config.use_jit:
+        if predictor_config.use_jit:
             self.coarse_net = torch.jit.trace(
                 self.coarse_net, torch.rand(1, 3, self.input_size, self.input_size)
             )
