@@ -2,7 +2,7 @@ import math
 import torch
 import torch.nn as nn
 
-from typing import Callable, Dict, List, Optional, OrderedDict
+from typing import Callable, Dict, List, Optional, OrderedDict, Union
 from torch import Tensor
 from dataclasses import dataclass
 
@@ -326,8 +326,8 @@ class DecaSettings:
     input_size: int
     coarse_parameters: OrderedDict
     # parameters for detail model are optional if configuring coarse model
-    detail_scale: float = None
-    detail_parameters: OrderedDict = None
+    detail_scale: Union[float, None] = None
+    detail_parameters: Union[OrderedDict, None] = None
 
 
 class DecaCoarse(nn.Module):
@@ -351,9 +351,9 @@ class DecaCoarse(nn.Module):
                 nn.Linear(640, self.output_size),
             )
         else:
-            raise NotImplementedError(f"Unknown backbone: {config.backbone}")
+            raise ValueError(f"Unknown backbone: {config.backbone}")
 
-    def forward(self, inputs):
+    def forward(self, inputs: torch.Tensor):
         features = self.coarse_encoder(inputs)
         parameters = self.coarse_layers(features)
         return parameters 
@@ -383,7 +383,7 @@ class DecaDetail(nn.Module):
                 nn.Linear(640, self.encoder_output_size),
             )
         else:
-            raise NotImplementedError(f"Unknown backbone: {config.backbone}")
+            raise ValueError(f"Unknown backbone: {config.backbone}")
         
         self.detail_decoder = Generator(self.decoder_input_size, self.detail_scale)
 

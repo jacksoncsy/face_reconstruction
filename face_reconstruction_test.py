@@ -127,7 +127,7 @@ def main() -> None:
                 device=args.reconstruction_device, model_config=frec_model,
             )
         else:
-            raise NotImplementedError(f"Undefined weight option: {rw}!")
+            raise ValueError(f"Undefined weight option: {rw}!")
 
         # Open the input video
         using_webcam = not os.path.exists(args.input)
