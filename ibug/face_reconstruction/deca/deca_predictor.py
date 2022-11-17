@@ -1,12 +1,12 @@
-import cv2
 import os.path as osp
-import torch
 import numpy as np
+import torch
+import typing
 
 from collections import OrderedDict
 from dataclasses import dataclass
 from enum import Enum, unique
-from typing import Union, Optional, Dict, List
+from typing import Any, Union, Optional, List
 
 from .deca import DecaCoarse, DecaDetail, DecaSettings
 from .deca_utils import (
@@ -38,6 +38,12 @@ class PredictorConfig:
     use_jit: bool
 
 
+@dataclass
+class Config:
+    model_config: ModelConfig
+    predictor_config: PredictorConfig    
+
+
 class DecaModelName(Enum):
     @classmethod
     def has_value(cls, value: str) -> bool:
@@ -60,7 +66,7 @@ class DecaCoarseModelName(DecaModelName):
 
 @unique
 class DecaDetailModelName(DecaModelName):
-    ARLV1_RES50_DETAIL  = "arlv1_res50_detail"
+    ARLV1_RES50_DETAIL_RESEARCH_ONLY = "arlv1_res50_detail_research_only"
 
 
 class DecaCoarsePredictor(object):
@@ -78,6 +84,10 @@ class DecaCoarsePredictor(object):
         # all the other settings for the predictor 
         if predictor_config is None:
             predictor_config = DecaCoarsePredictor.create_predictor_config()
+
+        self.config = Config(
+            model_config=model_config, predictor_config=predictor_config
+        )
         
         # load network to predict parameters
         self.net = DecaCoarse(config=model_config.settings)
@@ -245,104 +255,104 @@ class DecaCoarsePredictor(object):
     @torch.no_grad()
     def __call__(
         self, image: np.ndarray, landmarks: np.ndarray, rgb: bool=True
-    ) -> List[Dict]:
-        if landmarks.size > 0:
-            batch_size = landmarks.shape[0]
-            h, w = image.shape[:2]
-            # DECA expects RGB image as input
-            if not rgb:
-                image = image[..., ::-1]
-            # convert to (bs, n_lmk, 2)
-            if landmarks.ndim == 2:
-                landmarks = landmarks[np.newaxis, ...]
-
-            # Crop the faces
-            bboxes = []
-            batch_face = []
-            batch_tform = []
-            for lms in landmarks:
-                bbox = parse_bbox_from_landmarks(lms)
-                bboxes.append(bbox)
-                src_size, src_center = bbox2point(bbox)
-                # move the detected face to a standard frame
-                tform = compute_similarity_transform(src_size, src_center, self.input_size)
-                batch_tform.append(tform.params)
-                crop_image = transform_image_cv2(image / 255., tform, self.input_size)
-                batch_face.append(crop_image)
-
-            # (bs, 4)
-            bboxes = np.array(bboxes)
-            # (bs, 3, 3)
-            batch_tform = np.array(batch_tform)
-            batch_tform = torch.from_numpy(batch_tform).float().to(self.device)
-            # (bs, C, H, W)
-            batch_face = np.array(batch_face).transpose((0, 3, 1, 2))
-            batch_face = torch.from_numpy(batch_face).float().to(self.device)
-
-            # Get parameters including 3DMMs, pose, light, camera etc.
-            params = self.net(batch_face)
-
-            # Parse those parameters according to the config
-            params_dict = self.parse_parameters(params)
-
-            # Clamp the expression parameters for certain 3DMMs
-            if self.tdmm_type in ["arl", "arml"]:
-                params_dict["exp"] = torch.clamp(params_dict["exp"], min=0.0, max=1.0)
-            elif self.tdmm_type in ["arlv1"]:
-                params_dict["exp"] = torch.sigmoid(params_dict["exp"])
-
-            # Reconstruct using shape, expression and pose parameters
-            # Results are in world coordinates, we will bring them to the original image space3
-            # Also returns face poses (bs, 3) in radians with yaw-pitch-roll order
-            vertices_world, landmarks2d_world, landmarks3d_world, face_poses = self.tdmm(
-                shape_params=params_dict["shape"],
-                expression_params=params_dict["exp"],
-                pose_params=params_dict["pose"],
-            )
-
-            # Get projected vertices and landmarks in the crop image space
-            landmarks2d = batch_orth_proj(landmarks2d_world, params_dict["cam"])[..., :2]
-            landmarks2d[..., 1:] = -landmarks2d[..., 1:]
-            
-            landmarks3d = batch_orth_proj(landmarks3d_world, params_dict["cam"])
-            landmarks3d[..., 1:] = -landmarks3d[..., 1:]
-            
-            vertices = batch_orth_proj(vertices_world, params_dict["cam"])
-            vertices[..., 1:] = -vertices[..., 1:]
-
-            # Recover to the original image space
-            batch_inv_tform = torch.inverse(batch_tform).transpose(1,2).to(self.device)
-
-            landmarks2d = transform_to_image_space(
-                landmarks2d, batch_inv_tform, self.input_size
-            )
-            landmarks3d = transform_to_image_space(
-                landmarks3d, batch_inv_tform, self.input_size
-            )
-            vertices = transform_to_image_space(
-                vertices, batch_inv_tform, self.input_size
-            )
-
-            results = []
-            for i in range(batch_size):
-                results.append(
-                    {
-                        "bboxes": bboxes[i], # (4,)
-                        "params_dict": {k:v[i].cpu().numpy() for k, v in params_dict.items()},
-                        "vertices": vertices[i].cpu().numpy(), # (nv, 3)
-                        "landmarks2d": landmarks2d[i].cpu().numpy(), # (n_lmk, 2)
-                        "landmarks3d": landmarks3d[i].cpu().numpy(), # (n_lmk, 3)
-                        "vertices_world": vertices_world[i].cpu().numpy(), # (nv, 3)
-                        "landmarks3d_world": landmarks3d_world[i].cpu().numpy(), # (n_lmk, 3)
-                        "face_poses": face_poses[i].cpu().numpy(), # (3,)
-                        "inverse_transform": batch_inv_tform[i].cpu().numpy(), # (3,)
-                    }
-                )
-            return results
-        else:
+    ) -> List[typing.Dict[str, Any]]:
+        if landmarks.size == 0:
             return []
+        
+        batch_size = landmarks.shape[0]
+        h, w = image.shape[:2]
+        # DECA expects RGB image as input
+        if not rgb:
+            image = image[..., ::-1]
+        # convert to (bs, n_lmk, 2)
+        if landmarks.ndim == 2:
+            landmarks = landmarks[np.newaxis, ...]
 
-    def parse_parameters(self, parameters: torch.Tensor) -> Dict:
+        # Crop the faces
+        bboxes = []
+        batch_face = []
+        batch_tform = []
+        for lms in landmarks:
+            bbox = parse_bbox_from_landmarks(lms)
+            bboxes.append(bbox)
+            src_size, src_center = bbox2point(bbox)
+            # move the detected face to a standard frame
+            tform = compute_similarity_transform(src_size, src_center, self.input_size)
+            batch_tform.append(tform.params)
+            crop_image = transform_image_cv2(image / 255., tform, self.input_size)
+            batch_face.append(crop_image)
+
+        # (bs, 4)
+        bboxes = np.array(bboxes)
+        # (bs, 3, 3)
+        batch_tform = np.array(batch_tform)
+        batch_tform = torch.from_numpy(batch_tform).float().to(self.device)
+        # (bs, C, H, W)
+        batch_face = np.array(batch_face).transpose((0, 3, 1, 2))
+        batch_face = torch.from_numpy(batch_face).float().to(self.device)
+
+        # Get parameters including 3DMMs, pose, light, camera etc.
+        params = self.net(batch_face)
+
+        # Parse those parameters according to the config
+        params_dict = self.parse_parameters(params)
+
+        # Clamp the expression parameters for certain 3DMMs
+        if self.tdmm_type in ["arl", "arml"]:
+            params_dict["exp"] = torch.clamp(params_dict["exp"], min=0.0, max=1.0)
+        elif self.tdmm_type in ["arlv1"]:
+            params_dict["exp"] = torch.sigmoid(params_dict["exp"])
+
+        # Reconstruct using shape, expression and pose parameters
+        # Results are in world coordinates, we will bring them to the original image space3
+        # Also returns face poses (bs, 3) in radians with yaw-pitch-roll order
+        vertices_world, landmarks2d_world, landmarks3d_world, face_poses = self.tdmm(
+            shape_params=params_dict["shape"],
+            expression_params=params_dict["exp"],
+            pose_params=params_dict["pose"],
+        )
+
+        # Get projected vertices and landmarks in the crop image space
+        landmarks2d = batch_orth_proj(landmarks2d_world, params_dict["cam"])[..., :2]
+        landmarks2d[..., 1:] = -landmarks2d[..., 1:]
+        
+        landmarks3d = batch_orth_proj(landmarks3d_world, params_dict["cam"])
+        landmarks3d[..., 1:] = -landmarks3d[..., 1:]
+        
+        vertices = batch_orth_proj(vertices_world, params_dict["cam"])
+        vertices[..., 1:] = -vertices[..., 1:]
+
+        # Recover to the original image space
+        batch_inv_tform = torch.inverse(batch_tform).transpose(1,2).to(self.device)
+
+        landmarks2d = transform_to_image_space(
+            landmarks2d, batch_inv_tform, self.input_size
+        )
+        landmarks3d = transform_to_image_space(
+            landmarks3d, batch_inv_tform, self.input_size
+        )
+        vertices = transform_to_image_space(
+            vertices, batch_inv_tform, self.input_size
+        )
+
+        results = []
+        for i in range(batch_size):
+            results.append(
+                {
+                    "bboxes": bboxes[i], # (4,)
+                    "params_dict": {k:v[i].cpu().numpy() for k, v in params_dict.items()},
+                    "vertices": vertices[i].cpu().numpy(), # (nv, 3)
+                    "landmarks2d": landmarks2d[i].cpu().numpy(), # (n_lmk, 2)
+                    "landmarks3d": landmarks3d[i].cpu().numpy(), # (n_lmk, 3)
+                    "vertices_world": vertices_world[i].cpu().numpy(), # (nv, 3)
+                    "landmarks3d_world": landmarks3d_world[i].cpu().numpy(), # (n_lmk, 3)
+                    "face_poses": face_poses[i].cpu().numpy(), # (3,)
+                    "inverse_transform": batch_inv_tform[i].cpu().numpy(), # (3,)
+                }
+            )
+        return results
+
+    def parse_parameters(self, parameters: torch.Tensor) -> typing.Dict[str, torch.Tensor]:
         """
         args:
             parameters (bs, n_params): parameters predicted by deca
@@ -416,12 +426,15 @@ class DecaDetailPredictor(DecaCoarsePredictor):
         self.device = device
         # all the settings for the network and the corresponding 3DMMs
         if model_config is None:
-            model_config = DecaDetailPredictor.create_model_config()         
-        
+            model_config = DecaDetailPredictor.create_model_config()
         # all the other settings for the predictor 
         if predictor_config is None:
             predictor_config = DecaDetailPredictor.create_predictor_config()
         
+        self.config = Config(
+            model_config=model_config, predictor_config=predictor_config
+        )
+
         # load coarse model 
         self.coarse_net = DecaCoarse(config=model_config.settings)
         self.coarse_net.load_state_dict(
@@ -470,13 +483,13 @@ class DecaDetailPredictor(DecaCoarsePredictor):
         self.detail_synthesiser.to(self.device)
 
     @staticmethod
-    def create_model_config(name: str="arlv1_res50_detail") -> ModelConfig:
+    def create_model_config(name: str="arlv1_res50_detail_research_only") -> ModelConfig:
         name = name.lower()
         assert DecaDetailModelName.has_value(name), f"Unknown model name: {name}"
         method = DecaDetailModelName(name)        
-        if method == DecaDetailModelName.ARLV1_RES50_DETAIL:
+        if method == DecaDetailModelName.ARLV1_RES50_DETAIL_RESEARCH_ONLY:
             return ModelConfig(
-                weight_path=osp.join(osp.dirname(__file__), "weights/arlv1_res50_detail_test.pth"),
+                weight_path=osp.join(osp.dirname(__file__), "weights/arlv1_res50_detail_research_only.pth"),
                 settings=DecaSettings(
                     tdmm_type="arlv1",
                     backbone="resnet50",
@@ -496,7 +509,7 @@ class DecaDetailPredictor(DecaCoarsePredictor):
     @staticmethod
     def load_detail_synthesiser(config: DecaSettings) -> DetailSynthesiser:
         tdmm_type = config.tdmm_type.lower()
-        if tdmm_type in "arlv1":
+        if tdmm_type == "arlv1":
             synthesiser = DetailSynthesiser(
                 osp.join(osp.dirname(__file__), "assets/ar_linear_v1")
             )
@@ -508,116 +521,117 @@ class DecaDetailPredictor(DecaCoarsePredictor):
     @torch.no_grad()
     def __call__(
         self, image: np.ndarray, landmarks: np.ndarray, rgb: bool=True
-    ) -> List[Dict]:
-        if landmarks.size > 0:
-            batch_size = landmarks.shape[0]
-            # DECA expects RGB image as input
-            if not rgb:
-                image = image[..., ::-1]
-            # convert to (bs, n_lmk, 2)
-            if landmarks.ndim == 2:
-                landmarks = landmarks[np.newaxis, ...]
-
-            # Crop the faces
-            bboxes = []
-            batch_face = []
-            batch_tform = []
-            for lms in landmarks:
-                bbox = parse_bbox_from_landmarks(lms)
-                bboxes.append(bbox)
-                src_size, src_center = bbox2point(bbox)
-                # move the detected face to a standard frame
-                tform = compute_similarity_transform(src_size, src_center, self.input_size)
-                batch_tform.append(tform.params)
-                crop_image = transform_image_cv2(image / 255., tform, self.input_size)
-                batch_face.append(crop_image)
-
-            # (bs, 4)
-            bboxes = np.array(bboxes)
-            # (bs, 3, 3)
-            batch_tform = np.array(batch_tform)
-            batch_tform = torch.from_numpy(batch_tform).float().to(self.device)
-            # (bs, C, H, W)
-            batch_face = np.array(batch_face).transpose((0, 3, 1, 2))
-            batch_face = torch.from_numpy(batch_face).float().to(self.device)
-
-            # Get coarse parameters including 3DMMs, pose, light, camera.
-            coarse_params = self.coarse_net(batch_face)
-
-            # Parse coarse parameters according to the config
-            params_dict = self.parse_parameters(coarse_params)
-
-            # Clamp the expression parameters for certain 3DMMs
-            if self.tdmm_type in ["arl", "arml"]:
-                params_dict["exp"] = torch.clamp(params_dict["exp"], min=0.0, max=1.0)
-            elif self.tdmm_type in ["arlv1"]:
-                params_dict["exp"] = torch.sigmoid(params_dict["exp"])
-
-            # Get detail parameters
-            detail_params = self.detail_net(batch_face)
-            params_dict["detail"] = detail_params
-            uv_z = self.detail_net.decode(params_dict)
-            displacement_map = self.detail_synthesiser(uv_z)
-
-            # Reconstruct using shape, expression and pose parameters
-            # Results are in world coordinates, we will bring them to the original image space3
-            # Also returns face poses (bs, 3) in radians with yaw-pitch-roll order
-            vertices_world, landmarks2d_world, landmarks3d_world, face_poses = self.tdmm(
-                shape_params=params_dict["shape"],
-                expression_params=params_dict["exp"],
-                pose_params=params_dict["pose"],
-            )
-
-            # Get projected vertices and landmarks in the crop image space
-            landmarks2d = batch_orth_proj(landmarks2d_world, params_dict["cam"])[..., :2]
-            landmarks2d[..., 1:] = -landmarks2d[..., 1:]
-            
-            landmarks3d = batch_orth_proj(landmarks3d_world, params_dict["cam"])
-            landmarks3d[..., 1:] = -landmarks3d[..., 1:]
-            
-            vertices = batch_orth_proj(vertices_world, params_dict["cam"])
-            vertices[..., 1:] = -vertices[..., 1:]
-
-            # Recover to the original image space
-            batch_inv_tform = torch.inverse(batch_tform).transpose(1,2).to(self.device)
-
-            landmarks2d = transform_to_image_space(
-                landmarks2d, batch_inv_tform, self.input_size
-            )
-            landmarks3d = transform_to_image_space(
-                landmarks3d, batch_inv_tform, self.input_size
-            )
-            vertices = transform_to_image_space(
-                vertices, batch_inv_tform, self.input_size
-            )
-
-            # Get the detail mesh
-            tri_faces = torch.from_numpy(self.trilist[None, ...]).to(self.device)
-            tri_faces = tri_faces.expand(batch_size, -1, -1)
-            detail_results = self.detail_synthesiser.upsample_mesh(
-                vertices_world, tri_faces, displacement_map
-            )
-            dense_vertices_world = detail_results["dense_vertices"]
-            dense_faces = detail_results["dense_faces"]
-
-            results = []
-            for i in range(batch_size):
-                results.append(
-                    {
-                        "bboxes": bboxes[i], # (4,)
-                        "params_dict": {k:v[i].cpu().numpy() for k, v in params_dict.items()},
-                        "vertices": vertices[i].cpu().numpy(), # (nv, 3)
-                        "landmarks2d": landmarks2d[i].cpu().numpy(), # (n_lmk, 2)
-                        "landmarks3d": landmarks3d[i].cpu().numpy(), # (n_lmk, 3)
-                        "vertices_world": vertices_world[i].cpu().numpy(), # (nv, 3)
-                        "landmarks3d_world": landmarks3d_world[i].cpu().numpy(), # (n_lmk, 3)
-                        "face_poses": face_poses[i].cpu().numpy(), # (3,)
-                        "inverse_transform": batch_inv_tform[i].cpu().numpy(), # (3,)
-                        "uv_z": uv_z[i].cpu().numpy().transpose((1, 2, 0)), # (h, w, c)
-                        "dense_vertices_world": dense_vertices_world[i].cpu().numpy(), # (nv_dense, 3)
-                        "dense_faces": dense_faces[i].cpu().numpy(), # (ntri_dense, 3)
-                    }
-                )
-            return results
-        else:
+    ) -> List[typing.Dict[str, Any]]:
+        if landmarks.size == 0:
             return []
+
+        batch_size = landmarks.shape[0]
+        # DECA expects RGB image as input
+        if not rgb:
+            image = image[..., ::-1]
+        # convert to (bs, n_lmk, 2)
+        if landmarks.ndim == 2:
+            landmarks = landmarks[np.newaxis, ...]
+
+        # Crop the faces
+        bboxes = []
+        batch_face = []
+        batch_tform = []
+        for lms in landmarks:
+            bbox = parse_bbox_from_landmarks(lms)
+            bboxes.append(bbox)
+            src_size, src_center = bbox2point(bbox)
+            # move the detected face to a standard frame
+            tform = compute_similarity_transform(src_size, src_center, self.input_size)
+            batch_tform.append(tform.params)
+            crop_image = transform_image_cv2(image / 255., tform, self.input_size)
+            batch_face.append(crop_image)
+
+        # (bs, 4)
+        bboxes = np.array(bboxes)
+        # (bs, 3, 3)
+        batch_tform = np.array(batch_tform)
+        batch_tform = torch.from_numpy(batch_tform).float().to(self.device)
+        # (bs, C, H, W)
+        batch_face = np.array(batch_face).transpose((0, 3, 1, 2))
+        batch_face = torch.from_numpy(batch_face).float().to(self.device)
+
+        # Get coarse parameters including 3DMMs, pose, light, camera.
+        coarse_params = self.coarse_net(batch_face)
+
+        # Parse coarse parameters according to the config
+        params_dict = self.parse_parameters(coarse_params)
+
+        # Clamp the expression parameters for certain 3DMMs
+        if self.tdmm_type in ["arl", "arml"]:
+            params_dict["exp"] = torch.clamp(params_dict["exp"], min=0.0, max=1.0)
+        elif self.tdmm_type in ["arlv1"]:
+            params_dict["exp"] = torch.sigmoid(params_dict["exp"])
+
+        # Get detail parameters
+        detail_params = self.detail_net(batch_face)
+        params_dict["detail"] = detail_params
+        uv_z = self.detail_net.decode(params_dict)
+        displacement_map = self.detail_synthesiser(uv_z)
+
+        # Reconstruct using shape, expression and pose parameters
+        # Results are in world coordinates, we will bring them to the original image space3
+        # Also returns face poses (bs, 3) in radians with yaw-pitch-roll order
+        vertices_world, landmarks2d_world, landmarks3d_world, face_poses = self.tdmm(
+            shape_params=params_dict["shape"],
+            expression_params=params_dict["exp"],
+            pose_params=params_dict["pose"],
+        )
+
+        # Get projected vertices and landmarks in the crop image space
+        landmarks2d = batch_orth_proj(landmarks2d_world, params_dict["cam"])[..., :2]
+        landmarks2d[..., 1:] = -landmarks2d[..., 1:]
+        
+        landmarks3d = batch_orth_proj(landmarks3d_world, params_dict["cam"])
+        landmarks3d[..., 1:] = -landmarks3d[..., 1:]
+        
+        vertices = batch_orth_proj(vertices_world, params_dict["cam"])
+        vertices[..., 1:] = -vertices[..., 1:]
+
+        # Recover to the original image space
+        batch_inv_tform = torch.inverse(batch_tform).transpose(1,2).to(self.device)
+
+        landmarks2d = transform_to_image_space(
+            landmarks2d, batch_inv_tform, self.input_size
+        )
+        landmarks3d = transform_to_image_space(
+            landmarks3d, batch_inv_tform, self.input_size
+        )
+        vertices = transform_to_image_space(
+            vertices, batch_inv_tform, self.input_size
+        )
+
+        # Get the detail mesh
+        tri_faces = torch.from_numpy(self.trilist[None, ...]).to(self.device)
+        tri_faces = tri_faces.expand(batch_size, -1, -1)
+        detail_results = self.detail_synthesiser.upsample_mesh(
+            vertices_world, tri_faces, displacement_map
+        )
+        dense_vertices_world = detail_results["dense_vertices"]
+        dense_faces = detail_results["dense_faces"]
+
+        results = []
+        for i in range(batch_size):
+            results.append(
+                {
+                    "bboxes": bboxes[i], # (4,)
+                    "params_dict": {k:v[i].cpu().numpy() for k, v in params_dict.items()},
+                    "vertices": vertices[i].cpu().numpy(), # (nv, 3)
+                    "landmarks2d": landmarks2d[i].cpu().numpy(), # (n_lmk, 2)
+                    "landmarks3d": landmarks3d[i].cpu().numpy(), # (n_lmk, 3)
+                    "vertices_world": vertices_world[i].cpu().numpy(), # (nv, 3)
+                    "landmarks3d_world": landmarks3d_world[i].cpu().numpy(), # (n_lmk, 3)
+                    "face_poses": face_poses[i].cpu().numpy(), # (3,)
+                    "inverse_transform": batch_inv_tform[i].cpu().numpy(), # (3,)
+                    "uv_z": uv_z[i].cpu().numpy().transpose((1, 2, 0)), # (h, w, c)
+                    "dense_vertices_world": dense_vertices_world[i].cpu().numpy(), # (nv_dense, 3)
+                    "dense_faces": dense_faces[i].cpu().numpy(), # (ntri_dense, 3)
+                }
+            )
+        return results
+

@@ -1,5 +1,3 @@
-# -*- coding: utf-8 -*-
-import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -7,7 +5,7 @@ import torch.nn.functional as F
 from .deca_utils import compute_face_vertices, compute_vertex_normals
 from pytorch3d.structures import Meshes
 from pytorch3d.renderer.mesh import rasterize_meshes
-from typing import Union
+from typing import Optional
 
 
 class Pytorch3dRasterizer(nn.Module):
@@ -32,7 +30,7 @@ class Pytorch3dRasterizer(nn.Module):
         faces: torch.Tensor,
         h: int,
         w: int,
-        attributes: Union[torch.Tensor, None] = None,
+        attributes: torch.Tensor,
     ):
         """
         Notice:
@@ -89,7 +87,7 @@ class MeshRenderer(nn.Module):
         tri_faces: torch.Tensor,
         h: int,
         w: int,
-        images: Union[torch.Tensor, None] = None,
+        images: Optional[torch.Tensor] = None,
     ):
         """Rendering shape with detail normal map
         args:
@@ -132,7 +130,6 @@ class MeshRenderer(nn.Module):
         )
         # rasterize
         rendering = self.rasterizer(transformed_vertices, tri_faces, h, w, attributes)
-        rendering = rendering.detach()
 
         alpha_images = rendering[:, [-1]]
         # albedo
@@ -151,6 +148,7 @@ class MeshRenderer(nn.Module):
 
         alpha_images = alpha_images * pos_mask
 
+        # if there is a background image, we will overlay the mesh on top
         if images is None:
             shape_images = shaded_images * alpha_images + \
                 torch.zeros_like(shaded_images).to(device) * (1 - alpha_images)
@@ -159,7 +157,7 @@ class MeshRenderer(nn.Module):
         
         return shape_images
 
-    def add_directionlight(self, normals, lights):
+    def add_directionlight(self, normals: torch.Tensor, lights: torch.Tensor):
         """
         args:
             normals: (bz, nv, 3)

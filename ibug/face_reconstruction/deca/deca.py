@@ -1,10 +1,12 @@
 import math
 import torch
 import torch.nn as nn
+import typing
 
-from typing import Callable, Dict, List, Optional, OrderedDict, Union
+from collections import OrderedDict
+from dataclasses import dataclass, field
+from typing import Callable, List, Optional
 from torch import Tensor
-from dataclasses import dataclass
 
 
 def _make_divisible(v: float, divisor: int, min_value: Optional[int] = None):
@@ -324,10 +326,10 @@ class DecaSettings:
     tdmm_type: str
     backbone: str
     input_size: int
-    coarse_parameters: OrderedDict
+    coarse_parameters: typing.OrderedDict[str, int]
     # parameters for detail model are optional if configuring coarse model
-    detail_scale: Union[float, None] = None
-    detail_parameters: Union[OrderedDict, None] = None
+    detail_scale: float = 0.0
+    detail_parameters: typing.OrderedDict[str, int] = field(default_factory=OrderedDict)
 
 
 class DecaCoarse(nn.Module):
@@ -394,7 +396,7 @@ class DecaDetail(nn.Module):
         return parameters
 
     @torch.jit.export
-    def decode(self, params_dict: Dict[str, torch.Tensor]):
+    def decode(self, params_dict: typing.Dict[str, torch.Tensor]):
         # decode into detail displacement map
         uv_z = self.detail_decoder(
             torch.cat([params_dict[key] for key in self.detail_parameters], dim=1)

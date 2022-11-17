@@ -196,12 +196,6 @@ def main() -> None:
 
                 # Rendering
                 for result in reconstruction_results:
-                    if args.show_reconstruction_bbox:
-                        bbox = result["bboxes"].astype(int)
-                        cv2.rectangle(frame, (bbox[0], bbox[1]), (bbox[2], bbox[3]), color=(0, 0, 255), thickness=2)
-                    if args.show_reconstruction_landmarks2d:
-                        landmarks2d = result["landmarks2d"]
-                        plot_landmarks(frame, landmarks2d, line_colour=(255, 0, 0))
                     if args.show_reconstruction_rendering:
                         # render detailed mesh if using detail model
                         if use_detail:
@@ -219,6 +213,12 @@ def main() -> None:
                             result["params_dict"]["cam"][None, ...],
                         )
                         frame = np.ascontiguousarray(frame[0])
+                    if args.show_reconstruction_bbox:
+                        bbox = result["bboxes"].astype(int)
+                        cv2.rectangle(frame, (bbox[0], bbox[1]), (bbox[2], bbox[3]), color=(0, 0, 255), thickness=2)
+                    if args.show_reconstruction_landmarks2d:
+                        landmarks2d = result["landmarks2d"]
+                        plot_landmarks(frame, landmarks2d, line_colour=(255, 0, 0))
                     if not args.hide_reconstruction_landmarks3d:
                         landmarks3d = result["landmarks3d"][:, :2]
                         plot_landmarks(frame, landmarks3d)

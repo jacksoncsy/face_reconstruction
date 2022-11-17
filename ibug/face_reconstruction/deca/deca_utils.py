@@ -5,7 +5,7 @@ import torch
 import torch.nn.functional as F
 
 from skimage.transform import estimate_transform, warp, _geometric
-from typing import Tuple, Union
+from typing import Optional, Tuple, Union
 
 
 def batch_orth_proj(X: torch.Tensor, camera: torch.Tensor) -> torch.Tensor:
@@ -84,11 +84,12 @@ def compute_face_vertices(vertices: torch.Tensor, faces: torch.Tensor):
     return:
         vertices per triangle (bs, ntri, 3, 3)
     """
-    assert (vertices.ndimension() == 3)
-    assert (faces.ndimension() == 3)
-    assert (vertices.shape[0] == faces.shape[0])
-    assert (vertices.shape[2] == 3)
-    assert (faces.shape[2] == 3)
+    assert vertices.ndimension() == 3 and faces.ndimension() == 3
+    assert (
+        vertices.shape[0] == faces.shape[0]
+        and vertices.shape[2] == 3
+        and faces.shape[2] == 3
+    )
 
     bs, nv = vertices.shape[:2]
     device = vertices.device
@@ -107,9 +108,11 @@ def compute_vertex_normals(vertices: torch.Tensor, faces: torch.Tensor):
         vertex_normals: (bs, nv, 3)
     """
     assert vertices.ndim == 3 and faces.ndim == 3
-    assert vertices.shape[0] == faces.shape[0] and \
-        vertices.shape[2] == 3 and \
-        faces.shape[2] == 3
+    assert (
+        vertices.shape[0] == faces.shape[0]
+        and vertices.shape[2] == 3
+        and faces.shape[2] == 3
+    )
     bs, nv = vertices.shape[:2]
     device = vertices.device
     
@@ -225,11 +228,11 @@ def write_obj(
     save_path: str,
     vertices: np.ndarray,
     faces: np.ndarray,
-    colors: Union[np.ndarray, None] = None,
-    texture: Union[np.ndarray, None] = None,
-    uvcoords: Union[np.ndarray, None] = None,
-    uvfaces: Union[np.ndarray, None] = None,
-    normal_map: Union[np.ndarray, None] = None,
+    colors: Optional[np.ndarray] = None,
+    texture: Optional[np.ndarray] = None,
+    uvcoords: Optional[np.ndarray] = None,
+    uvfaces: Optional[np.ndarray] = None,
+    normal_map: Optional[np.ndarray] = None,
     inverse_face_order: bool = False,
 ):
     """ Save 3D face model with texture. 

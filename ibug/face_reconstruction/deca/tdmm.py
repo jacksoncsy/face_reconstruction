@@ -4,7 +4,7 @@ import numpy as np
 import pickle
 import os.path as osp
 
-from typing import Union
+from typing import Optional
 from .deca_utils import compute_vertex_normals
 from .tdmm_utils import (
     batch_rodrigues,
@@ -22,10 +22,10 @@ from .tdmm_utils import (
 class ARLinear(nn.Module):
     def __init__(
         self,
-        tdmm_dir,
-        tdmm_name="ar_linear_tdmm.pkl",
-        template_name="base_det.obj",
-        lmk_embedding_name="landmark_embedding.pkl",
+        tdmm_dir: str,
+        tdmm_name: str = "ar_linear_tdmm.pkl",
+        template_name: str = "base_det.obj",
+        lmk_embedding_name: str = "landmark_embedding.pkl",
     ):
         super(ARLinear, self).__init__()
 
@@ -50,7 +50,7 @@ class ARLinear(nn.Module):
         # Triangulation
         return self.faces_tensor.cpu().numpy().astype(np.int64)
 
-    def load_landmark_embeddings(self, filepath):
+    def load_landmark_embeddings(self, filepath: str):
         lmk_embeddings = pickle.load(open(filepath, "rb"))
         # (n_interal_pts,), n_interal_pts == 51 for 68 landmarks, 83 for 100 landmarks
         self.register_buffer(
@@ -83,7 +83,7 @@ class ARLinear(nn.Module):
             torch.from_numpy(lmk_embeddings["full_lmk_bary_coords"]).to(self.dtype),
         )
         
-    def load_basis(self, model_path):
+    def load_basis(self, model_path: str):
         with open(model_path, "rb") as f:
             tdmm_dict = pickle.load(f)
 
@@ -102,17 +102,21 @@ class ARLinear(nn.Module):
         return mean_shape, u_id, u_exp
 
     def _find_dynamic_lmk_idx_and_bcoords(
-        self, pose, dynamic_lmk_faces_idx, dynamic_lmk_b_coords, dtype: torch.dtype = torch.float32,
+        self,
+        pose: torch.Tensor,
+        dynamic_lmk_faces_idx: torch.Tensor,
+        dynamic_lmk_b_coords: torch.Tensor,
+        dtype: torch.dtype = torch.float32,
     ):
         """
             Selects the face contour depending on the reletive position of the head
-            Input:
-                vertices: N X num_of_vertices X 3
-                pose: (N, 3)
+            Args:
+                vertices (bs, nv, 3)
+                pose (bs, 3)
                 dynamic_lmk_faces_idx: The list of contour face indexes
                 dynamic_lmk_b_coords: The list of contour barycentric weights
                 dtype: Data type
-            return:
+            Return:
                 The contour face indexes and the corresponding barycentric weights
         """
         # get yaw angle
@@ -128,7 +132,7 @@ class ARLinear(nn.Module):
 
         return dyn_lmk_faces_idx, dyn_lmk_b_coords
 
-    def select_3d_landmarks(self, vertices):
+    def select_3d_landmarks(self, vertices: torch.Tensor):
         landmarks3d = vertices2landmarks(
             vertices,
             self.faces_tensor,
@@ -137,12 +141,14 @@ class ARLinear(nn.Module):
         )
         return landmarks3d
 
-    def get_euler_angles(self, pose_params, dtype: torch.dtype = torch.float32):
+    def get_euler_angles(
+        self, pose_params: torch.Tensor, dtype: torch.dtype = torch.float32
+    ):
         """
-            Input:
-                pose_params: (bs, 6)
-            return:
-                angles: (bs, 3), [yaw, pitch, roll]
+        args:
+            pose_params: (bs, 6)
+        return:
+            angles: (bs, 3), [yaw, pitch, roll]
         """
         batch_size = pose_params.shape[0]
         # get the final rotation matrix
@@ -158,16 +164,22 @@ class ARLinear(nn.Module):
         
         return angles
         
-    def forward(self, shape_params, expression_params, pose_params):
+    def forward(
+        self,
+        shape_params: torch.Tensor,
+        expression_params: torch.Tensor,
+        pose_params: torch.Tensor,
+    ):
         """
             Input:
-                shape_params: (N, n_shape)
-                expression_params: (N, n_exp)
-                pose_params: (N, n_pose), n_pose=6, rotation vector (axis-angle) + [tx, ty, tx]
-            return:d
-                vertices: (N, V, 3)
-                landmarks2d: (N, n_landmarks, 2), boundary placed on contour
-                landmarks3d: (N, n_landmarks, 3)
+                shape_params: (bs, n_shape)
+                expression_params: (bs, n_exp)
+                pose_params: (bs, n_pose), n_pose=6, rotation vector (axis-angle) + [tx, ty, tx]
+            return:
+                vertices: (bs, nv, 3)
+                landmarks2d: (bs, n_lmk, 3), 2D-style landmarks
+                landmarks3d: (bs, n_lmk, 3), full 3D landmarks
+                face_poses: (bs, 3), face pose in radians with yaw-pitch-roll order            
         """
         batch_size = shape_params.shape[0]
 
@@ -221,7 +233,7 @@ class ARLinear(nn.Module):
 
 
 class ARMultilinear(nn.Module):
-    def __init__(self, tdmm_dir):
+    def __init__(self, tdmm_dir: str):
         super(ARMultilinear, self).__init__()
 
         self.dtype = torch.float32
@@ -252,7 +264,7 @@ class ARMultilinear(nn.Module):
         # Triangulation
         return self.faces_tensor.cpu().numpy().astype(np.int64)
 
-    def load_landmark_embeddings(self, filepath):
+    def load_landmark_embeddings(self, filepath: str):
         lmk_embeddings = pickle.load(open(filepath, "rb"))
         # (51,)
         self.register_buffer(
@@ -285,7 +297,7 @@ class ARMultilinear(nn.Module):
             torch.from_numpy(lmk_embeddings['full_lmk_bary_coords']).to(self.dtype),
         )
         
-    def load_basis(self, model_path):
+    def load_basis(self, model_path: str):
         with open(model_path, "rb") as f:
             num_ids, num_exps, num_verts = np.fromfile(f, np.int32, 3)
             u_core = np.fromfile(f, np.float32, num_ids * num_exps * num_verts)
@@ -311,17 +323,21 @@ class ARMultilinear(nn.Module):
         return u_core, u_id, u_exp
 
     def _find_dynamic_lmk_idx_and_bcoords(
-        self, pose, dynamic_lmk_faces_idx, dynamic_lmk_b_coords, dtype: torch.dtype = torch.float32,
+        self,
+        pose: torch.Tensor,
+        dynamic_lmk_faces_idx: torch.Tensor,
+        dynamic_lmk_b_coords: torch.Tensor,
+        dtype: torch.dtype = torch.float32,
     ):
         """
             Selects the face contour depending on the reletive position of the head
-            Input:
-                vertices: N X num_of_vertices X 3
-                pose: (N, 3)
+            Args:
+                vertices (bs, nv, 3)
+                pose (bs, 3)
                 dynamic_lmk_faces_idx: The list of contour face indexes
                 dynamic_lmk_b_coords: The list of contour barycentric weights
                 dtype: Data type
-            return:
+            Return:
                 The contour face indexes and the corresponding barycentric weights
         """
         # get yaw angle
@@ -337,7 +353,7 @@ class ARMultilinear(nn.Module):
 
         return dyn_lmk_faces_idx, dyn_lmk_b_coords
 
-    def select_3d_landmarks(self, vertices):
+    def select_3d_landmarks(self, vertices: torch.Tensor):
         landmarks3d = vertices2landmarks(
             vertices,
             self.faces_tensor,
@@ -346,7 +362,9 @@ class ARMultilinear(nn.Module):
         )
         return landmarks3d
 
-    def get_euler_angles(self, pose_params, dtype: torch.dtype = torch.float32):
+    def get_euler_angles(
+        self, pose_params: torch.Tensor, dtype: torch.dtype = torch.float32
+    ):
         """
             Input:
                 pose_params: (bs, 6)
@@ -367,12 +385,17 @@ class ARMultilinear(nn.Module):
         
         return angles
 
-    def forward(self, shape_params, expression_params, pose_params):
+    def forward(
+        self,
+        shape_params: torch.Tensor,
+        expression_params: torch.Tensor,
+        pose_params: torch.Tensor,
+    ):
         """
             Input:
-                shape_params: (N, n_shape)
-                expression_params: (N, n_exp)
-                pose_params: (N, n_pose), n_pose=6, rotation vector (axis-angle) + [tx, ty, tx]
+                shape_params: (bs, n_shape)
+                expression_params: (bs, n_exp)
+                pose_params: (bs, n_pose), n_pose=6, rotation vector (axis-angle) + [tx, ty, tx]
             return:
                 vertices: (bs, nv, 3)
                 landmarks2d: (bs, n_lmk, 3), 2D-style landmarks
@@ -713,9 +736,9 @@ class FLAME(nn.Module):
 class DetailSynthesiser(nn.Module):
     def __init__(
         self,
-        tdmm_dir,
-        dense_template_name="dense_template.npy",
-        fixed_displacement_name="fixed_displacement_256.npy",
+        tdmm_dir: str,
+        dense_template_name: str = "dense_template.npy",
+        fixed_displacement_name: str = "fixed_displacement_256.npy",
     ) -> None:
         super(DetailSynthesiser, self).__init__()
         # displacement correction
@@ -739,7 +762,7 @@ class DetailSynthesiser(nn.Module):
             "valid_pixel_b_coords", torch.tensor(dense_template["valid_pixel_b_coords"]).float()
         )
 
-    def forward(self, uv_z):
+    def forward(self, uv_z: torch.Tensor):
         """
         add fixed displacement to the predicted uv map
             uv_z (bs, 1, h, w) is generated by DECA detail model 
@@ -754,7 +777,7 @@ class DetailSynthesiser(nn.Module):
         vertices: torch.Tensor,
         tri_faces: torch.Tensor,
         displacement_map: torch.Tensor,
-        texture_map: Union[None, torch.Tensor] = None,
+        texture_map: Optional[torch.Tensor] = None,
     ):
         """ 
         upsampling coarse mesh (with displacment map)
